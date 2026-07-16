@@ -13,6 +13,11 @@ import {
 } from "react";
 
 import db, { auth } from "@/lib/firebase";
+import {
+  cacheAccountRole,
+  clearCachedAccountRole,
+  readCachedAccountRole,
+} from "@/lib/auth-role-cache";
 import type { AccountRole } from "@/lib/server";
 
 type AuthContextValue = {
@@ -38,7 +43,10 @@ export function AuthProvider({
   const router = useRouter();
 
   useEffect(() => {
+    let active = true;
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (!active) return;
       setUser(currentUser);
 
       if (!currentUser) {
@@ -48,20 +56,47 @@ export function AuthProvider({
         return;
       }
 
-      if (currentUser.displayName) {
-        const profile = await getDoc(doc(db, "users", currentUser.displayName));
-        const storedRole = profile.data()?.role;
-        setRole(
-          storedRole === "student" || storedRole === "administrator"
-            ? storedRole
-            : null,
-        );
+      const cachedRole = readCachedAccountRole(currentUser.uid);
+
+      // The login form already verified this role. Paint the dashboard now,
+      // then revalidate Firestore in the background instead of blocking it.
+      if (cachedRole) {
+        setRole(cachedRole);
+        setLoading(false);
       }
 
-      setLoading(false);
+      try {
+        if (!currentUser.displayName) {
+          clearCachedAccountRole(currentUser.uid);
+          if (active) setRole(null);
+          return;
+        }
+
+        const profile = await getDoc(doc(db, "users", currentUser.displayName));
+        const storedRole = profile.data()?.role;
+        const verifiedRole =
+          storedRole === "student" || storedRole === "administrator"
+            ? storedRole
+            : null;
+
+        if (!active) return;
+        setRole(verifiedRole);
+        if (verifiedRole) cacheAccountRole(currentUser.uid, verifiedRole);
+        else clearCachedAccountRole(currentUser.uid);
+      } catch {
+        // Server actions independently verify authorization. A temporary
+        // Firestore failure should not trap a previously verified session on
+        // a full-screen spinner.
+        if (active && !cachedRole) setRole(null);
+      } finally {
+        if (active) setLoading(false);
+      }
     });
 
-    return unsubscribe;
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, [router]);
 
   if (loading || !user) {

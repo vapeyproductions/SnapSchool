@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
+import { cacheAccountRole } from "@/lib/auth-role-cache";
 import { registerUser } from "@/lib/server";
 
 type AccountType = "student" | "administrator";
@@ -14,19 +15,25 @@ export default function RegisterPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const router = useRouter();
 
+  useEffect(() => {
+    router.prefetch("/chat");
+  }, [router]);
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setButtonClicked(true);
     setErrorMessage("");
 
     const formData = new FormData(event.currentTarget);
+    let isNavigating = false;
 
     try {
       const result = await registerUser(formData);
 
-      if (result.status === 200) {
+      if (result.status === 200 && result.user) {
+        cacheAccountRole(result.user.uid, accountType);
+        isNavigating = true;
         router.replace("/chat");
-        router.refresh();
         return;
       }
 
@@ -36,7 +43,7 @@ export default function RegisterPage() {
         error instanceof Error ? error.message : "Unable to create account",
       );
     } finally {
-      setButtonClicked(false);
+      if (!isNavigating) setButtonClicked(false);
     }
   };
 

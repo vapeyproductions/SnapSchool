@@ -23,6 +23,7 @@ import StreakPage from "@/app/components/StreakPage";
 import StreakReminderModal from "@/app/components/StreakReminderModal";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
+import { clearCachedAccountRole } from "@/lib/auth-role-cache";
 import { logoutUser } from "@/lib/server";
 
 type ChatView = "individual" | "groups";
@@ -49,6 +50,7 @@ export default function ChatPage() {
     const result = await logoutUser();
 
     if (result.code === "auth/success") {
+      if (user) clearCachedAccountRole(user.uid);
       router.replace("/login");
       return;
     }
