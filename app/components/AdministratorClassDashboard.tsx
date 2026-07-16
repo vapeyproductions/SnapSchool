@@ -218,6 +218,20 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
   const noProgressStudents =
     selectedAssignment?.channels.filter((channel) => progressPercent(channel) === 0)
       .length ?? 0;
+  const today = new Date();
+  const todayString = [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, "0"),
+    String(today.getDate()).padStart(2, "0"),
+  ].join("-");
+  const assignmentIsOverdue = Boolean(
+    selectedAssignment?.dueDate && selectedAssignment.dueDate < todayString,
+  );
+  const overdueStudents = assignmentIsOverdue
+    ? selectedAssignment?.channels.filter(
+        (channel) => progressPercent(channel) < 100,
+      ).length ?? 0
+    : 0;
   const messageThreads = useMemo(
     () =>
       (selectedAssignment?.channels ?? [])
@@ -243,8 +257,8 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
 
   return (
     <Chat client={client}>
-      <div className="grid min-h-[42rem] bg-white lg:grid-cols-[15rem_19rem_minmax(0,1fr)]">
-        <aside className="border-b-2 border-black bg-[#f4f0e8] lg:border-b-0 lg:border-r-2">
+      <div className="grid min-h-[42rem] w-full min-w-0 overflow-hidden bg-white md:grid-cols-[14rem_minmax(0,1fr)] xl:grid-cols-[15rem_19rem_minmax(0,1fr)]">
+        <aside className="min-w-0 overflow-hidden border-b-2 border-black bg-[#f4f0e8] md:border-r-2 xl:border-b-0">
           <div className="border-b-2 border-black bg-[#fffc00] px-4 py-4">
             <p className="text-xs font-black uppercase tracking-[0.14em]">Classes</p>
             <p className="mt-1 text-xs font-medium text-zinc-700">Choose a class to review its work.</p>
@@ -285,7 +299,7 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
           </div>
         </aside>
 
-        <aside className="border-b-2 border-black bg-white lg:border-b-0 lg:border-r-2">
+        <aside className="min-w-0 overflow-hidden border-b-2 border-black bg-white xl:border-b-0 xl:border-r-2">
           <div className="border-b-2 border-black px-4 py-4">
             <p className="font-black">{selectedClass?.name ?? "Assignments"}</p>
             <p className="mt-1 text-xs text-zinc-500">Published assignments and assessments</p>
@@ -311,7 +325,7 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
 
                 return (
                   <button
-                    className={`rounded-2xl border-2 p-3 text-left transition ${
+                    className={`min-w-0 max-w-full overflow-hidden rounded-2xl border-2 p-3 text-left transition ${
                       effectiveAssignmentKey === assignment.key
                         ? "border-black bg-[#fffbd5] shadow-[3px_3px_0_#111]"
                         : "border-zinc-200 bg-white hover:border-black"
@@ -325,8 +339,8 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
                     type="button"
                   >
                     <span className="flex items-start justify-between gap-2">
-                      <span className="min-w-0">
-                        <span className="block truncate font-black">{assignment.title}</span>
+                      <span className="min-w-0 max-w-full overflow-hidden">
+                        <span className="line-clamp-2 block break-words font-black leading-5">{assignment.title}</span>
                         <span className="mt-1 block text-xs capitalize text-zinc-500">
                           {assignment.kind} · {formatDueDate(assignment.dueDate)}
                         </span>
@@ -351,7 +365,7 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
           </div>
         </aside>
 
-        <main className="min-w-0 bg-[#f4f0e8]">
+        <main className="min-w-0 overflow-hidden bg-[#f4f0e8] md:col-span-2 xl:col-span-1">
           {errorMessage ? (
             <p className="m-4 rounded-2xl border-2 border-red-600 bg-red-50 p-4 text-sm font-semibold text-red-700" role="alert">
               {errorMessage}
@@ -403,8 +417,8 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
               </header>
 
               {tab === "overview" && (
-                <section className="grid gap-4 p-4 sm:grid-cols-3">
-                  <div className="rounded-2xl border-2 border-black bg-white p-4 shadow-[3px_3px_0_#111] sm:col-span-3">
+                <section className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="rounded-2xl border-2 border-black bg-white p-4 shadow-[3px_3px_0_#111] sm:col-span-2 lg:col-span-4">
                     <div className="flex items-end justify-between gap-3">
                       <div>
                         <p className="text-sm font-black">Overall class progress</p>
@@ -426,14 +440,24 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
                     <p className="mt-3 text-2xl font-black">{selectedAssignment.channels.length - completedStudents - noProgressStudents}</p>
                     <p className="text-xs font-bold text-amber-800">In progress</p>
                   </div>
-                  <div className="rounded-2xl border-2 border-black bg-red-100 p-4">
-                    <AlertTriangle className="size-5 text-red-700" />
+                  <div className="rounded-2xl border-2 border-black bg-slate-100 p-4">
+                    <CircleUserRound className="size-5 text-slate-700" />
                     <p className="mt-3 text-2xl font-black">{noProgressStudents}</p>
-                    <p className="text-xs font-bold text-red-800">Not started</p>
+                    <p className="text-xs font-bold text-slate-800">Not started</p>
+                  </div>
+                  <div className={`rounded-2xl border-2 border-black p-4 ${overdueStudents > 0 ? "bg-red-100" : "bg-zinc-100"}`}>
+                    <AlertTriangle className={`size-5 ${overdueStudents > 0 ? "text-red-700" : "text-zinc-500"}`} />
+                    <p className="mt-3 text-2xl font-black">{overdueStudents}</p>
+                    <p className={`text-xs font-bold ${overdueStudents > 0 ? "text-red-800" : "text-zinc-600"}`}>Overdue</p>
+                    <p className="mt-1 text-[10px] leading-4 text-zinc-600">
+                      {assignmentIsOverdue
+                        ? "Past due and below 100%"
+                        : "Activates the day after the due date"}
+                    </p>
                   </div>
                   {messageThreads.length > 0 && (
                     <button
-                      className="flex items-center justify-between rounded-2xl border-2 border-black bg-[#c7b7ff] p-4 text-left shadow-[3px_3px_0_#111] sm:col-span-3"
+                      className="flex items-center justify-between rounded-2xl border-2 border-black bg-[#c7b7ff] p-4 text-left shadow-[3px_3px_0_#111] sm:col-span-2 lg:col-span-4"
                       onClick={() => setTab("messages")}
                       type="button"
                     >
