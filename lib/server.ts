@@ -142,45 +142,14 @@ export const loginUser = async (form: FormData) => {
       };
     }
 
-    const profile = await getDoc(doc(db, "users", user.displayName));
-
-    if (!profile.exists()) {
-      await signOut(auth);
-      return {
-        code: "auth/profile-missing" as const,
-        status: 403,
-        user: null,
-        message: "This account does not have a Firestore profile",
-      };
-    }
-
-    const storedRole = profile.data().role;
-
-    if (storedRole !== "student" && storedRole !== "administrator") {
-      await signOut(auth);
-      return {
-        code: "auth/role-missing" as const,
-        status: 403,
-        user: null,
-        message: "This account does not have a valid account type",
-      };
-    }
-
-    if (storedRole !== selectedRole) {
-      await signOut(auth);
-      return {
-        code: "auth/role-mismatch" as const,
-        status: 403,
-        user: null,
-        message: `This is a ${storedRole} account. Select ${storedRole} to sign in.`,
-      };
-    }
-
     return {
       code: "auth/success" as const,
       status: 200,
       user,
-      role: storedRole as AccountRole,
+      // AuthContext immediately renders with this provisional role and then
+      // replaces it with the Firestore role in the background. Privileged
+      // server actions always perform their own role verification.
+      role: selectedRole as AccountRole,
       message: "Logged in successfully! 🎉",
     };
   } catch (error: unknown) {

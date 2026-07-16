@@ -28,6 +28,11 @@ type FirebaseAccount = {
   localId?: string;
 };
 
+type VerifiedFirebaseAccount = {
+  uid: string;
+  username: string;
+};
+
 type UserProfile = {
   role: AccountRole;
   uid: string;
@@ -112,9 +117,9 @@ const getProfile = async (
   return { role, uid, username: normalizedUsername };
 };
 
-const authenticateCaller = async (
+const verifyFirebaseAccount = async (
   firebaseIdToken: string,
-): Promise<UserProfile> => {
+): Promise<VerifiedFirebaseAccount> => {
   if (!firebaseIdToken) throw new Error("You must be signed in");
 
   const { firebaseApiKey } = requireServerConfig();
@@ -137,9 +142,17 @@ const authenticateCaller = async (
     throw new Error("Your session is invalid or has expired. Sign in again.");
   }
 
-  const profile = await getProfile(firebaseIdToken, username);
+  return { uid: account.localId, username };
+};
 
-  if (profile.uid !== account.localId) {
+const authenticateCaller = async (
+  firebaseIdToken: string,
+): Promise<UserProfile> => {
+  const account = await verifyFirebaseAccount(firebaseIdToken);
+
+  const profile = await getProfile(firebaseIdToken, account.username);
+
+  if (profile.uid !== account.uid) {
     throw new Error("Your SchoolSnap profile could not be verified");
   }
 
@@ -293,8 +306,11 @@ const publicClassSummary = (
 });
 
 export async function createToken(firebaseIdToken: string): Promise<string> {
-  const profile = await authenticateCaller(firebaseIdToken);
-  return serverClient.createToken(profile.uid);
+  // A Stream token only authorizes the signed-in user as themselves. The
+  // Firebase account lookup verifies the ID token and supplies that UID;
+  // Firestore role checks remain on privileged assignment/class actions.
+  const account = await verifyFirebaseAccount(firebaseIdToken);
+  return serverClient.createToken(account.uid);
 }
 
 export const getAdministratorClasses = async (
