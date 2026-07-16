@@ -1,0 +1,336 @@
+import { differenceInCalendarDays, parseISO } from "date-fns";
+import {
+  createUserWithEmailAndPassword,
+  deleteUser,
+  signInWithEmailAndPassword,
+  signOut,
+  updateProfile,
+} from "firebase/auth";
+import {
+  doc,
+  getDoc,
+  runTransaction,
+  serverTimestamp,
+} from "firebase/firestore";
+import type { ChannelMemberResponse } from "stream-chat";
+
+import db, { auth } from "./firebase";
+
+export type AccountRole = "student" | "administrator";
+
+export const registerUser = async (form: FormData) => {
+  let createdUser: typeof auth.currentUser = null;
+
+  try {
+    const email = String(form.get("email") ?? "")
+      .trim()
+      .toLowerCase();
+    const password = String(form.get("password") ?? "");
+    const username = String(form.get("username") ?? "")
+      .trim()
+      .toLowerCase();
+    const roleValue = form.get("role");
+    const imageBaseUrl = process.env.NEXT_PUBLIC_IMAGE_URL;
+
+    if (!email || !password || !username) {
+      throw new Error("Email, password, and username are required");
+    }
+
+    if (!/^[a-z0-9_.-]{3,30}$/.test(username)) {
+      throw new Error(
+        "Username must be 3-30 characters and use only letters, numbers, dots, underscores, or hyphens",
+      );
+    }
+
+    if (password.length < 8) {
+      throw new Error("Password must contain at least 8 characters");
+    }
+
+    if (roleValue !== "student" && roleValue !== "administrator") {
+      throw new Error("Select a valid account type");
+    }
+
+    if (!imageBaseUrl) {
+      throw new Error("User image configuration is missing");
+    }
+
+    const role: AccountRole = roleValue;
+    const photoURL = `${imageBaseUrl}${encodeURIComponent(username)}`;
+    const userRef = doc(db, "users", username);
+
+    const { user } = await createUserWithEmailAndPassword(
+      auth,
+      email,
+      password,
+    );
+    createdUser = user;
+
+    await updateProfile(user, {
+      displayName: username,
+      photoURL,
+    });
+
+    await runTransaction(db, async (transaction) => {
+      const usernameRecord = await transaction.get(userRef);
+
+      // Recheck inside the transaction to prevent simultaneous registrations
+      // from claiming the same username.
+      if (usernameRecord.exists()) {
+        throw new Error("That username is already taken");
+      }
+
+      transaction.set(userRef, {
+        uid: user.uid,
+        username,
+        email: user.email,
+        photoURL,
+        role,
+        createdAt: serverTimestamp(),
+      });
+    });
+
+    return {
+      code: "auth/success" as const,
+      status: 200,
+      user,
+      message: "Account created successfully! 🎉",
+    };
+  } catch (error: unknown) {
+    // Avoid leaving an Auth account without its matching Firestore profile.
+    if (createdUser) {
+      await deleteUser(createdUser).catch(() => undefined);
+    }
+
+    return {
+      code: "auth/failed" as const,
+      status: 500,
+      user: null,
+      message:
+        error instanceof Error ? error.message : "Unable to create account",
+      error,
+    };
+  }
+};
+
+export const loginUser = async (form: FormData) => {
+  const email = String(form.get("email") ?? "")
+    .trim()
+    .toLowerCase();
+  const password = String(form.get("password") ?? "");
+  const selectedRole = form.get("role");
+  let authenticatedThisAttempt = false;
+
+  try {
+    if (!email || !password) {
+      throw new Error("Email and password are required");
+    }
+
+    if (selectedRole !== "student" && selectedRole !== "administrator") {
+      throw new Error("Select a valid account type");
+    }
+
+    const { user } = await signInWithEmailAndPassword(auth, email, password);
+    authenticatedThisAttempt = true;
+
+    if (!user.displayName) {
+      await signOut(auth);
+      return {
+        code: "auth/profile-missing" as const,
+        status: 403,
+        user: null,
+        message: "This account does not have a user profile",
+      };
+    }
+
+    const profile = await getDoc(doc(db, "users", user.displayName));
+
+    if (!profile.exists()) {
+      await signOut(auth);
+      return {
+        code: "auth/profile-missing" as const,
+        status: 403,
+        user: null,
+        message: "This account does not have a Firestore profile",
+      };
+    }
+
+    const storedRole = profile.data().role;
+
+    if (storedRole !== "student" && storedRole !== "administrator") {
+      await signOut(auth);
+      return {
+        code: "auth/role-missing" as const,
+        status: 403,
+        user: null,
+        message: "This account does not have a valid account type",
+      };
+    }
+
+    if (storedRole !== selectedRole) {
+      await signOut(auth);
+      return {
+        code: "auth/role-mismatch" as const,
+        status: 403,
+        user: null,
+        message: `This is a ${storedRole} account. Select ${storedRole} to sign in.`,
+      };
+    }
+
+    return {
+      code: "auth/success" as const,
+      status: 200,
+      user,
+      role: storedRole as AccountRole,
+      message: "Logged in successfully! 🎉",
+    };
+  } catch (error: unknown) {
+    if (authenticatedThisAttempt) {
+      await signOut(auth).catch(() => undefined);
+    }
+
+    return {
+      code: "auth/failed" as const,
+      status: 500,
+      user: null,
+      message:
+        error instanceof Error ? error.message : "Failed to login user",
+      error,
+    };
+  }
+};
+
+export const logoutUser = async () => {
+  try {
+    await signOut(auth);
+
+    return {
+      code: "auth/success" as const,
+      status: 200,
+      user: null,
+      message: "Logged out successfully! 🎉",
+    };
+  } catch (error: unknown) {
+    return {
+      code: "auth/failed" as const,
+      status: 500,
+      user: null,
+      message: "Failed to logout user",
+      error,
+    };
+  }
+};
+
+// Get Firebase user IDs from student or administrator usernames.
+export const getUserIDsByUsernames = async (
+  usernames: string[],
+): Promise<string[]> => {
+  const memberIDs = new Set<string>();
+
+  for (const name of usernames) {
+    const username = name.trim().toLowerCase();
+
+    if (!username) continue;
+
+    const userRef = doc(db, "users", username);
+    const userDoc = await getDoc(userRef);
+
+    if (userDoc.exists()) {
+      const uid = userDoc.data().uid;
+
+      if (typeof uid === "string" && uid) {
+        memberIDs.add(uid);
+      }
+    }
+  }
+
+  return [...memberIDs];
+};
+
+// Get a Stream member's display name from their Firebase user ID.
+export const getUsernameById = (
+  members: Record<string, ChannelMemberResponse>,
+  userId: string,
+): string | null => {
+  for (const member of Object.values(members)) {
+    if (member.user_id === userId) {
+      return member.user?.name ?? null;
+    }
+  }
+
+  return null;
+};
+
+// Compare two dates using UTC calendar boundaries.
+export const isSameUTCDate = (date: Date, today: Date): boolean => {
+  return (
+    date.getUTCFullYear() === today.getUTCFullYear() &&
+    date.getUTCMonth() === today.getUTCMonth() &&
+    date.getUTCDate() === today.getUTCDate()
+  );
+};
+
+// Count at most one streak day per channel and UTC calendar date.
+export async function updateChatStreak(
+  channelId: string,
+  today: Date,
+  targetDays?: number,
+): Promise<void> {
+  if (!channelId.trim()) {
+    throw new Error("A channel ID is required to update a streak");
+  }
+
+  if (Number.isNaN(today.getTime())) {
+    throw new Error("A valid date is required to update a streak");
+  }
+
+  if (
+    targetDays !== undefined &&
+    (!Number.isInteger(targetDays) || targetDays < 1 || targetDays > 60)
+  ) {
+    throw new Error("A streak target must be between 1 and 60 days");
+  }
+
+  const todayString = today.toISOString().split("T")[0];
+  const streakRef = doc(db, "channels", channelId);
+
+  await runTransaction(db, async (transaction) => {
+    const streakSnap = await transaction.get(streakRef);
+    const streakData = streakSnap.exists() ? streakSnap.data() : {};
+    const currentStreak =
+      typeof streakData.currentStreak === "number"
+        ? streakData.currentStreak
+        : 0;
+    const lastStreakDate =
+      typeof streakData.lastStreakDate === "string"
+        ? streakData.lastStreakDate
+        : null;
+
+    if (targetDays !== undefined && currentStreak >= targetDays) return;
+
+    let newStreak = 1;
+
+    if (lastStreakDate) {
+      const dayDiff = differenceInCalendarDays(
+        parseISO(todayString),
+        parseISO(lastStreakDate),
+      );
+
+      // Today was already counted, or the stored date is unexpectedly newer.
+      if (dayDiff <= 0) return;
+
+      newStreak = dayDiff === 1 ? currentStreak + 1 : 1;
+    }
+
+    if (targetDays !== undefined) newStreak = Math.min(newStreak, targetDays);
+
+    transaction.set(
+      streakRef,
+      {
+        currentStreak: newStreak,
+        lastStreakDate: todayString,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  });
+}

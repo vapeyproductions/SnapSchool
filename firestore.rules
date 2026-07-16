@@ -1,0 +1,62 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function validRole(data) {
+      return data.role == 'student' || data.role == 'administrator';
+    }
+
+    match /users/{username} {
+      // Signed-in users need to resolve one another by username when an
+      // administrator creates an assignment.
+      allow get: if signedIn();
+      allow list: if false;
+
+      // Anyone may choose either supported account type during registration,
+      // but the new profile must belong to the authenticated Firebase user.
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.username == username
+        && validRole(request.resource.data);
+
+      // Account owners may edit their profile later, but cannot change the
+      // identity, username, or role that authorization depends on.
+      allow update: if signedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.username == resource.data.username
+        && request.resource.data.role == resource.data.role;
+
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    match /channels/{channelId} {
+      // These documents currently contain only streak counters. Stream holds
+      // the assignment messages and membership data.
+      allow read, create, update: if signedIn();
+      allow delete: if false;
+    }
+
+    match /classes/{classId} {
+      // Class rosters are private to their administrators. SchoolSnap's
+      // authenticated server action performs the additional role check.
+      allow get, list: if signedIn()
+        && request.auth.uid in resource.data.administratorIds;
+
+      allow create: if signedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.auth.uid in request.resource.data.administratorIds;
+
+      allow update: if signedIn()
+        && request.auth.uid in resource.data.administratorIds
+        && request.auth.uid in request.resource.data.administratorIds;
+
+      allow delete: if signedIn()
+        && request.auth.uid in resource.data.administratorIds;
+    }
+  }
+}
