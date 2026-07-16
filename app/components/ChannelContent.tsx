@@ -231,25 +231,25 @@ export function ChannelContent({
   return (
     <Window>
       <div className="flex h-full min-h-0 flex-col">
-        <header className="shrink-0 border-b border-slate-200 bg-white px-4 py-3">
+        <header className="shrink-0 border-b-2 border-black bg-black px-4 py-3 text-white">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
-              <p className="truncate font-semibold text-slate-950">
+              <p className="truncate text-lg font-black tracking-tight text-white">
                 {assignmentTitle}
               </p>
-              <p className="text-xs text-slate-500">
+              <p className="mt-0.5 text-xs font-medium text-zinc-300">
                 {channel.data?.class_name || "Individual assignment"}
                 {dueDate &&
                   ` · Due ${new Date(`${dueDate}T00:00:00`).toLocaleDateString()}`}
               </p>
             </div>
 
-            <div className="grid shrink-0 grid-cols-2 rounded-xl bg-slate-100 p-1">
+            <div className="grid shrink-0 grid-cols-2 rounded-full border border-white/30 bg-zinc-800 p-1">
               <button
-                className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                className={`flex items-center justify-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold transition ${
                   view === "plan"
-                    ? "bg-white text-indigo-700 shadow-sm"
-                    : "text-slate-600 hover:text-slate-950"
+                    ? "bg-[#fffc00] text-black"
+                    : "text-zinc-300 hover:text-white"
                 }`}
                 onClick={() => changeView("plan")}
                 type="button"
@@ -258,10 +258,10 @@ export function ChannelContent({
                 {isAssessment ? "Study plan" : "Assignment plan"}
               </button>
               <button
-                className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                className={`flex items-center justify-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold transition ${
                   view === "messages"
-                    ? "bg-white text-indigo-700 shadow-sm"
-                    : "text-slate-600 hover:text-slate-950"
+                    ? "bg-[#fffc00] text-black"
+                    : "text-zinc-300 hover:text-white"
                 }`}
                 onClick={() => changeView("messages")}
                 type="button"
@@ -274,18 +274,19 @@ export function ChannelContent({
         </header>
 
         {view === "plan" ? (
-          <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50/40">
-            <div className="flex items-center justify-between gap-3 border-b border-zinc-200 bg-white px-4 py-2">
-              <p className="text-sm font-medium text-zinc-700">
-                🔥 {currentStreak} day streak
+          <div className="min-h-0 flex-1 overflow-y-auto bg-[#f4f0e8]">
+            <div className="flex items-center justify-between gap-3 border-b-2 border-black bg-[#fffc00] px-4 py-3">
+              <p className="text-sm font-black text-black">
+                <span className="mr-1.5 inline-flex size-7 items-center justify-center rounded-full bg-[#ff5b35] text-white">🔥</span>
+                {currentStreak} day streak
                 {targetDays && (
-                  <span className="ml-2 font-normal text-zinc-500">
+                  <span className="ml-2 font-semibold text-zinc-700">
                     · Assignment {completedWorkDays} / {targetDays} work days
                   </span>
                 )}
               </p>
               <button
-                className="shrink-0 rounded-full bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-500"
+                className="shrink-0 rounded-full border-2 border-black bg-white px-3 py-1.5 text-xs font-black text-black shadow-[2px_2px_0_#111] transition hover:-translate-y-0.5"
                 onClick={showReminder}
                 type="button"
               >
@@ -308,7 +309,7 @@ export function ChannelContent({
           </div>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col bg-white">
-            <div className="shrink-0 border-b border-indigo-100 bg-indigo-50 px-4 py-2.5 text-xs leading-5 text-indigo-900">
+            <div className="shrink-0 border-b-2 border-black bg-[#c7b7ff] px-4 py-2.5 text-xs font-semibold leading-5 text-black">
               {role === "student"
                 ? "Ask your teacher a question about this assignment. Your conversation stays attached to this work."
                 : "Answer student questions and discuss this assignment here."}

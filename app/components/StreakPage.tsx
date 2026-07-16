@@ -56,32 +56,32 @@ function AuthenticatedStreakPage({
 
   return (
     <Chat client={client}>
-      <div className="chat-container flex h-[62vh] min-h-[32rem] max-h-[46rem] overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <div className="chat-container flex h-[66vh] min-h-[36rem] max-h-[52rem] overflow-hidden bg-white max-md:h-auto max-md:min-h-0 max-md:flex-col">
         <div
-          className={`channel-list shrink-0 overflow-y-auto border-r border-slate-200 max-sm:w-36 ${
-            role === "administrator" ? "w-96" : "w-80"
+          className={`channel-list shrink-0 overflow-y-auto border-r-2 border-black bg-[#f4f0e8] max-md:h-48 max-md:w-full max-md:border-b-2 max-md:border-r-0 ${
+            role === "administrator" ? "teacher-pulse-list w-96" : "student-story-list w-80"
           }`}
         >
           {role === "student" && (
-            <div className="border-b border-slate-200 bg-slate-50 px-3 py-2 max-sm:hidden">
-              <p className="text-xs font-semibold text-slate-700">Priority order</p>
-              <p className="mt-0.5 text-[11px] leading-4 text-slate-500">
-                Based on the due date and estimated work remaining.
+            <div className="sticky top-0 z-10 border-b-2 border-black bg-[#fffc00] px-4 py-3">
+              <p className="text-xs font-black uppercase tracking-[0.13em] text-black">Your streak feed</p>
+              <p className="mt-0.5 text-[11px] font-medium leading-4 text-zinc-700">
+                Most urgent is always at the top.
               </p>
             </div>
           )}
           {role === "administrator" ? (
             <>
-              <div className="sticky top-0 z-10 border-b border-slate-200 bg-white p-2">
-                <p className="mb-2 px-1 text-xs font-semibold text-slate-700">
-                  Organize students by
+              <div className="sticky top-0 z-10 border-b-2 border-black bg-[#fffc00] p-3">
+                <p className="mb-2 px-1 text-xs font-black uppercase tracking-[0.13em] text-black">
+                  View your pulse by
                 </p>
-                <div className="grid grid-cols-2 rounded-lg bg-slate-100 p-1">
+                <div className="grid grid-cols-2 rounded-full border-2 border-black bg-white p-1">
                   <button
-                    className={`rounded-md px-2 py-1.5 text-xs font-semibold ${
+                    className={`rounded-full px-2 py-1.5 text-xs font-bold ${
                       teacherGrouping === "class"
-                        ? "bg-white text-indigo-700 shadow-sm"
-                        : "text-slate-600"
+                        ? "bg-black text-white"
+                        : "text-zinc-600"
                     }`}
                     onClick={() => setTeacherGrouping("class")}
                     type="button"
@@ -89,10 +89,10 @@ function AuthenticatedStreakPage({
                     Class
                   </button>
                   <button
-                    className={`rounded-md px-2 py-1.5 text-xs font-semibold ${
+                    className={`rounded-full px-2 py-1.5 text-xs font-bold ${
                       teacherGrouping === "assignment"
-                        ? "bg-white text-indigo-700 shadow-sm"
-                        : "text-slate-600"
+                        ? "bg-black text-white"
+                        : "text-zinc-600"
                     }`}
                     onClick={() => setTeacherGrouping("assignment")}
                     type="button"
@@ -118,7 +118,7 @@ function AuthenticatedStreakPage({
           )}
         </div>
 
-        <div className="chat-panel min-w-0 flex-1">
+        <div className="chat-panel min-w-0 flex-1 bg-white max-md:h-[38rem]">
           <Channel>
             <ChannelContent
               user={user}

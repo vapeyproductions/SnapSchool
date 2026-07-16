@@ -41,30 +41,30 @@ export default function RegisterPage() {
   };
 
   return (
-    <section className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm">
+    <section className="w-full max-w-md rounded-[2rem] border-2 border-black bg-white p-6 shadow-[7px_7px_0_#111] sm:p-8">
       <div className="mb-6">
-        <p className="mb-2 text-sm font-medium text-zinc-500">
-          Snapchat Clone
+        <p className="mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-[#f24e2e]">
+          Start a new momentum streak
         </p>
-        <h1 className="text-2xl font-semibold text-zinc-950">
-          Create your account
+        <h1 className="text-3xl font-black tracking-[-0.04em] text-zinc-950">
+          Join SnapSchool
         </h1>
         <p className="mt-2 text-sm text-zinc-600">
-          Select the type of account you want to create.
+          Choose your role and make progress feel social.
         </p>
       </div>
 
       <div
-        className="mb-6 grid grid-cols-2 rounded-lg bg-zinc-100 p-1"
+        className="mb-6 grid grid-cols-2 rounded-full border-2 border-black bg-[#f4f0e8] p-1"
         aria-label="Account type"
       >
         <button
           type="button"
           aria-pressed={accountType === "student"}
           onClick={() => setAccountType("student")}
-          className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+          className={`rounded-full px-3 py-2 text-sm font-bold transition-colors ${
             accountType === "student"
-              ? "bg-white text-zinc-950 shadow-sm"
+              ? "bg-black text-white"
               : "text-zinc-600 hover:text-zinc-950"
           }`}
         >
@@ -74,9 +74,9 @@ export default function RegisterPage() {
           type="button"
           aria-pressed={accountType === "administrator"}
           onClick={() => setAccountType("administrator")}
-          className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+          className={`rounded-full px-3 py-2 text-sm font-bold transition-colors ${
             accountType === "administrator"
-              ? "bg-white text-zinc-950 shadow-sm"
+              ? "bg-black text-white"
               : "text-zinc-600 hover:text-zinc-950"
           }`}
         >
@@ -97,7 +97,7 @@ export default function RegisterPage() {
             type="text"
             id="username"
             name="username"
-            className="w-full rounded-lg border border-zinc-300 px-3 py-2 outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-950/10"
+            className="w-full rounded-2xl border-2 border-black px-3 py-2.5 outline-none transition focus:shadow-[2px_2px_0_#111]"
           />
         </div>
 
@@ -111,7 +111,7 @@ export default function RegisterPage() {
             type="email"
             id="email"
             name="email"
-            className="w-full rounded-lg border border-zinc-300 px-3 py-2 outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-950/10"
+            className="w-full rounded-2xl border-2 border-black px-3 py-2.5 outline-none transition focus:shadow-[2px_2px_0_#111]"
           />
         </div>
 
@@ -126,13 +126,13 @@ export default function RegisterPage() {
             type="password"
             id="password"
             name="password"
-            className="w-full rounded-lg border border-zinc-300 px-3 py-2 outline-none transition focus:border-zinc-950 focus:ring-2 focus:ring-zinc-950/10"
+            className="w-full rounded-2xl border-2 border-black px-3 py-2.5 outline-none transition focus:shadow-[2px_2px_0_#111]"
           />
           <p className="text-xs text-zinc-500">Use at least 8 characters.</p>
         </div>
 
         <button
-          className="w-full rounded-lg bg-zinc-950 px-4 py-2.5 font-medium text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full rounded-full border-2 border-black bg-[#fffc00] px-4 py-3 font-black text-black shadow-[3px_3px_0_#111] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
           type="submit"
           disabled={buttonClicked}
         >

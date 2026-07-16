@@ -1,6 +1,6 @@
 "use client";
 
-import { FileCheck2, Loader2, Sparkles, Upload } from "lucide-react";
+import { Camera, Loader2, Sparkles, Upload } from "lucide-react";
 import { useContext, useRef, useState } from "react";
 import { useChannelStateContext } from "stream-chat-react";
 
@@ -103,21 +103,23 @@ export function StudentProgressSubmission() {
   };
 
   return (
-    <section className="border-b border-emerald-100 bg-emerald-50/60 px-4 py-3">
-      <div className="flex items-start gap-2">
-        <FileCheck2 className="mt-0.5 size-5 shrink-0 text-emerald-700" />
+    <section className="m-4 rounded-[1.75rem] border-2 border-black bg-white p-4 shadow-[4px_4px_0_#111] sm:p-5">
+      <div className="flex items-start gap-3">
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-full border-2 border-black bg-[#fffc00]">
+          <Camera className="size-5" />
+        </span>
         <div>
-          <p className="text-sm font-semibold text-emerald-950">Complete today with progress evidence</p>
-          <p className="text-xs leading-5 text-slate-600">
-            Upload visible work. AI will compare it with the assignment plan and adjust what remains before the due date.
+          <p className="font-black tracking-tight text-black">Snap today&apos;s progress</p>
+          <p className="mt-0.5 text-xs font-medium leading-5 text-zinc-600">
+            Share visible work. AI checks it against today&apos;s mission and reshapes the plan if needed.
           </p>
         </div>
       </div>
 
-      <form className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]" onSubmit={submitProgress}>
+      <form className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]" onSubmit={submitProgress}>
         <div className="space-y-2">
-          <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-emerald-300 bg-white px-3 py-2 text-xs text-slate-600">
-            <Upload className="size-4 text-emerald-700" />
+          <label className="flex cursor-pointer items-center gap-2 rounded-2xl border-2 border-dashed border-black bg-[#f4f0e8] px-3 py-3 text-xs font-bold text-zinc-700 transition hover:bg-[#fffc00]">
+            <Upload className="size-4 text-black" />
             <input
               accept=".gif,.jpeg,.jpg,.pdf,.png,.txt,.webp,.doc,.docx"
               className="min-w-0 flex-1"
@@ -131,21 +133,21 @@ export function StudentProgressSubmission() {
             />
           </label>
           <input
-            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-500"
+            className="w-full rounded-2xl border-2 border-black bg-white px-3 py-2.5 text-sm outline-none focus:shadow-[2px_2px_0_#111]"
             maxLength={2000}
             onChange={(event) => setNote(event.target.value)}
             placeholder="Optional: briefly explain what you completed"
             value={note}
           />
-          <p className="text-[11px] text-slate-500">Maximum 10 MB. Do not upload grades or unrelated private information.</p>
+          <p className="text-[11px] font-medium text-zinc-500">Maximum 10 MB. Keep grades and unrelated private information out of frame.</p>
         </div>
         <button
-          className="flex items-center justify-center gap-2 self-start rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+          className="flex items-center justify-center gap-2 self-start rounded-full border-2 border-black bg-[#fffc00] px-5 py-3 text-sm font-black text-black shadow-[3px_3px_0_#111] transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-50"
           disabled={isSubmitting || !file}
           type="submit"
         >
           {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-          {isSubmitting ? "Reviewing..." : "Submit progress"}
+          {isSubmitting ? "Reviewing..." : "Keep my streak"}
         </button>
       </form>
 

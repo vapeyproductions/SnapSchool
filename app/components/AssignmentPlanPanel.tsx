@@ -57,16 +57,16 @@ export function AssignmentPlanPanel({
   if (!summary && tasks.length === 0) return null;
 
   return (
-    <section className="border-b border-indigo-100 bg-indigo-50/70 px-4 py-3 text-sm">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-indigo-950">
-        <strong className="flex items-center gap-1.5"><ListChecks className="size-4" /> {isAssessment ? "Study plan" : "Assignment plan"}</strong>
-        {dueDate && <span className="flex items-center gap-1 text-slate-600"><CalendarDays className="size-3.5" /> {isAssessment ? "Test" : "Due"} {new Date(`${dueDate}T00:00:00`).toLocaleDateString()}</span>}
-        {typeof estimatedMinutes === "number" && <span className="flex items-center gap-1 text-slate-600"><Clock3 className="size-3.5" /> About {estimatedMinutes} minutes {channel.data?.last_progress_at ? "remaining" : "total"}</span>}
-        {typeof effectiveCompletedDays === "number" && typeof targetDays === "number" && <span className="text-slate-600">Progress {effectiveCompletedDays} / {targetDays} days</span>}
+    <section className="m-4 rounded-[1.75rem] border-2 border-black bg-white p-4 text-sm shadow-[4px_4px_0_#111] sm:p-5">
+      <div className="flex flex-wrap items-center gap-2 text-black">
+        <strong className="mr-2 flex items-center gap-1.5 text-base font-black"><ListChecks className="size-5" /> {isAssessment ? "Study roadmap" : "Your roadmap"}</strong>
+        {dueDate && <span className="flex items-center gap-1 rounded-full bg-black px-2.5 py-1 text-xs font-bold text-white"><CalendarDays className="size-3.5" /> {isAssessment ? "Test" : "Due"} {new Date(`${dueDate}T00:00:00`).toLocaleDateString()}</span>}
+        {typeof estimatedMinutes === "number" && <span className="flex items-center gap-1 rounded-full bg-[#c7b7ff] px-2.5 py-1 text-xs font-bold"><Clock3 className="size-3.5" /> {estimatedMinutes} min {channel.data?.last_progress_at ? "left" : "total"}</span>}
+        {typeof effectiveCompletedDays === "number" && typeof targetDays === "number" && <span className="rounded-full bg-[#c9f7d4] px-2.5 py-1 text-xs font-bold">{effectiveCompletedDays} / {targetDays} days</span>}
       </div>
-      {summary && <p className="mt-2 leading-5 text-slate-700">{summary}</p>}
+      {summary && <p className="mt-3 max-w-3xl font-medium leading-6 text-zinc-700">{summary}</p>}
       {overdue && (
-        <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-red-950">
+        <div className="mt-4 rounded-2xl border-2 border-red-600 bg-red-50 p-4 text-red-950">
           <p className="flex items-center gap-2 font-semibold">
             <AlertTriangle className="size-4 text-red-600" /> Deadline missed — recovery plan
           </p>
@@ -83,7 +83,7 @@ export function AssignmentPlanPanel({
           )}
           {onOpenMessages && (
             <button
-              className="mt-3 flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700"
+              className="mt-3 flex items-center gap-1.5 rounded-full border-2 border-black bg-red-600 px-3 py-2 text-xs font-black text-white shadow-[2px_2px_0_#111] hover:bg-red-700"
               onClick={onOpenMessages}
               type="button"
             >
@@ -94,21 +94,22 @@ export function AssignmentPlanPanel({
         </div>
       )}
       {nextTask && effectiveCompletedDays !== undefined && effectiveCompletedDays < tasks.length && (
-        <div className="mt-2 rounded-lg bg-white px-3 py-2 text-slate-700">
-          <strong>{isAssessment ? "Next review" : "Next"}: Day {nextTask.dayNumber} · {nextTask.title}</strong>
-          <span className="ml-2 text-slate-500">{nextTask.estimatedMinutes} min</span>
-          <p className="mt-1">{nextTask.description}</p>
+        <div className="mt-4 rounded-2xl border-2 border-black bg-[#fffc00] p-4 text-black">
+          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.16em]">Today&apos;s mission</p>
+          <strong className="text-base">Day {nextTask.dayNumber} · {nextTask.title}</strong>
+          <span className="ml-2 rounded-full bg-white px-2 py-1 text-xs font-bold">{nextTask.estimatedMinutes} min</span>
+          <p className="mt-2 font-medium leading-5">{nextTask.description}</p>
         </div>
       )}
       {assignmentComplete && (
         <p className="mt-2 flex items-center gap-1.5 font-medium text-emerald-700"><CheckCircle2 className="size-4" /> {isAssessment ? "Study plan completed" : "Assignment streak completed"}</p>
       )}
       {tasks.length > 0 && (
-        <details className="mt-2">
-          <summary className="cursor-pointer font-medium text-indigo-700">View all {tasks.length} daily {isAssessment ? "study sessions" : "tasks"}</summary>
+        <details className="mt-4 border-t-2 border-dashed border-zinc-300 pt-3">
+          <summary className="cursor-pointer font-black text-black">See the full {tasks.length}-day {isAssessment ? "study plan" : "mission plan"}</summary>
           <ol className="mt-2 space-y-2">
             {tasks.map((task) => (
-              <li className="rounded-lg bg-white px-3 py-2" key={task.dayNumber}>
+              <li className="rounded-xl border border-zinc-300 bg-[#f4f0e8] px-3 py-2" key={task.dayNumber}>
                 <strong>Day {task.dayNumber}: {task.title}</strong>
                 <span className="ml-2 text-slate-500">{task.estimatedMinutes} min</span>
                 <p className="mt-1 text-slate-600">{task.description}</p>

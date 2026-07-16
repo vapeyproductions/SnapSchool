@@ -59,7 +59,8 @@ export function PriorityAssignmentList({
         const priority = getAssignmentPriority(channel.data ?? {});
         return (
           <div
-            className="border-l-4"
+            className="assignment-story-card"
+            data-urgency={priority.urgency}
             key={channel.cid}
             style={{
               backgroundColor: enabled ? priority.color.background : undefined,

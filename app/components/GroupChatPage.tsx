@@ -44,12 +44,16 @@ function AuthenticatedGroupChat({ user }: { user: User }) {
 
   return (
     <Chat client={client}>
-      <div className="chat-container flex h-[62vh] min-h-[32rem] max-h-[46rem] overflow-hidden rounded-2xl border border-slate-200 bg-white">
-        <div className="channel-list w-64 shrink-0 overflow-y-auto border-r border-slate-200 max-sm:w-28">
+      <div className="chat-container flex h-[66vh] min-h-[36rem] max-h-[52rem] overflow-hidden bg-white max-md:h-auto max-md:min-h-0 max-md:flex-col">
+        <div className="channel-list w-72 shrink-0 overflow-y-auto border-r-2 border-black bg-[#f4f0e8] max-md:h-44 max-md:w-full max-md:border-b-2 max-md:border-r-0">
+          <div className="sticky top-0 z-10 border-b-2 border-black bg-[#c7b7ff] px-4 py-3">
+            <p className="text-xs font-black uppercase tracking-[0.13em]">Project circles</p>
+            <p className="mt-0.5 text-[11px] font-medium">Team updates and conversations</p>
+          </div>
           <ChannelList filters={filters} options={options} sort={sort} />
         </div>
 
-        <div className="chat-panel min-w-0 flex-1">
+        <div className="chat-panel min-w-0 flex-1 max-md:h-[38rem]">
           <Channel>
             <Window>
               <ChannelHeader />
