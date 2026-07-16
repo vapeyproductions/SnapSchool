@@ -6,12 +6,10 @@ import {
   Loader2,
   School,
   Sparkles,
-  UserRound,
 } from "lucide-react";
-import { type Dispatch, useContext, useState } from "react";
+import { type Dispatch, useContext, useEffect, useState } from "react";
 
 import {
-  createAssignmentChannel,
   createClassAssignment,
   getAdministratorClasses,
   type SchoolClassSummary,
@@ -25,15 +23,12 @@ import {
 } from "@/components/ui/dialog";
 import type { AssignmentAnalysis } from "@/lib/assignment-analysis";
 
-type AssignmentAudience = "class" | "student";
-
 export default function CreateStreakModal({
   setOpen,
 }: {
   setOpen: Dispatch<React.SetStateAction<boolean>>;
 }) {
   const { role, user } = useContext(AuthContext);
-  const [audience, setAudience] = useState<AssignmentAudience>("student");
   const [assignmentRequestId, setAssignmentRequestId] = useState(() => crypto.randomUUID());
   const [classes, setClasses] = useState<SchoolClassSummary[]>([]);
   const [classesLoaded, setClassesLoaded] = useState(false);
@@ -41,7 +36,6 @@ export default function CreateStreakModal({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [studentUsername, setStudentUsername] = useState("");
   const [classId, setClassId] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
@@ -49,26 +43,35 @@ export default function CreateStreakModal({
   const [analysis, setAnalysis] = useState<AssignmentAnalysis | null>(null);
   const [title, setTitle] = useState("");
 
-  const chooseAudience = async (nextAudience: AssignmentAudience) => {
-    setAudience(nextAudience);
-    setErrorMessage("");
-    if (nextAudience !== "class" || !user || role !== "administrator" || classesLoaded) return;
+  useEffect(() => {
+    if (!user || role !== "administrator" || classesLoaded) return;
+    let cancelled = false;
 
-    setIsLoadingClasses(true);
-    try {
-      const result = await getAdministratorClasses(await user.getIdToken());
-      if (result.success) {
-        setClasses(result.classes);
-        setClassesLoaded(true);
-      } else {
-        setErrorMessage(result.error ?? "Unable to load classes");
+    const loadClasses = async () => {
+      setIsLoadingClasses(true);
+      try {
+        const result = await getAdministratorClasses(await user.getIdToken());
+        if (cancelled) return;
+        if (result.success) {
+          setClasses(result.classes);
+          setClassesLoaded(true);
+        } else {
+          setErrorMessage(result.error ?? "Unable to load classes");
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setErrorMessage(error instanceof Error ? error.message : "Unable to load classes");
+        }
+      } finally {
+        if (!cancelled) setIsLoadingClasses(false);
       }
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Unable to load classes");
-    } finally {
-      setIsLoadingClasses(false);
-    }
-  };
+    };
+
+    void loadClasses();
+    return () => {
+      cancelled = true;
+    };
+  }, [classesLoaded, role, user]);
 
   const analyzeAssignment = async () => {
     setErrorMessage("");
@@ -143,35 +146,19 @@ export default function CreateStreakModal({
         recommendedWorkDays: analysis.recommendedWorkDays,
       };
 
-      if (audience === "class") {
-        const result = await createClassAssignment({
-          classId,
-          firebaseIdToken,
-          plan,
-          requestId: assignmentRequestId,
-          title: title.trim(),
-        });
-        if (result.success) {
-          setAssignmentRequestId(crypto.randomUUID());
-          setOpen(false);
-          return;
-        }
-        setErrorMessage(result.error ?? "Unable to assign work to the class");
-        return;
-      }
-
-      const result = await createAssignmentChannel({
-        assignmentType: "individual",
+      const result = await createClassAssignment({
+        classId,
         firebaseIdToken,
-        memberUsernames: [studentUsername.trim().toLowerCase()],
         plan,
+        requestId: assignmentRequestId,
         title: title.trim(),
       });
       if (result.success) {
+        setAssignmentRequestId(crypto.randomUUID());
         setOpen(false);
         return;
       }
-      setErrorMessage(result.error ?? "Unable to create the assignment");
+      setErrorMessage(result.error ?? "Unable to assign work to the class");
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Unable to create the assignment");
     } finally {
@@ -189,34 +176,18 @@ export default function CreateStreakModal({
       </DialogHeader>
 
       <form className="space-y-5" onSubmit={createAssignment}>
-        <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
-          <button className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold ${audience === "student" ? "bg-white text-indigo-700 shadow-sm" : "text-slate-600"}`} onClick={() => void chooseAudience("student")} type="button">
-            <UserRound className="size-4" /> One student
-          </button>
-          <button className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold ${audience === "class" ? "bg-white text-indigo-700 shadow-sm" : "text-slate-600"}`} onClick={() => void chooseAudience("class")} type="button">
-            <School className="size-4" /> A saved class
-          </button>
-        </div>
-
-        {audience === "student" ? (
-          <label className="block space-y-2 text-sm font-medium">
-            Student username
-            <input className="w-full rounded-xl border border-slate-300 px-3 py-2.5 outline-none focus:border-indigo-500 focus:ring-3 focus:ring-indigo-100" onChange={(event) => setStudentUsername(event.target.value)} placeholder="Enter the student's exact username" required value={studentUsername} />
-          </label>
-        ) : (
-          <label className="block space-y-2 text-sm font-medium">
-            Class
-            {isLoadingClasses ? (
-              <span className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-3 text-slate-500"><Loader2 className="size-4 animate-spin" /> Loading classes...</span>
-            ) : (
-              <select className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5" disabled={!classesLoaded || classes.length === 0} onChange={(event) => setClassId(event.target.value)} required value={classId}>
-                <option value="">Select a class</option>
-                {classes.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.id}>{schoolClass.name} ({schoolClass.studentCount} students)</option>)}
-              </select>
-            )}
-            {classesLoaded && classes.length === 0 && <span className="block text-xs text-amber-700">Create a class and add students before assigning classwork.</span>}
-          </label>
-        )}
+        <label className="block space-y-2 text-sm font-medium">
+          <span className="flex items-center gap-2"><School className="size-4" /> Class</span>
+          {isLoadingClasses ? (
+            <span className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-3 text-slate-500"><Loader2 className="size-4 animate-spin" /> Loading classes...</span>
+          ) : (
+            <select className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5" disabled={!classesLoaded || classes.length === 0} onChange={(event) => setClassId(event.target.value)} required value={classId}>
+              <option value="">Select a class</option>
+              {classes.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.id}>{schoolClass.name} ({schoolClass.studentCount} students)</option>)}
+            </select>
+          )}
+          {classesLoaded && classes.length === 0 && <span className="block text-xs text-amber-700">Create a class and add students before assigning classwork.</span>}
+        </label>
 
         <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4 space-y-4">
           <div className="flex items-center gap-2 font-semibold text-indigo-950"><Sparkles className="size-5 text-indigo-600" /> Assignment source</div>
@@ -258,9 +229,9 @@ export default function CreateStreakModal({
 
         {errorMessage && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{errorMessage}</p>}
         {analysis && (
-          <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-60" disabled={isCreating || !dueDate || !title.trim() || (audience === "class" && !classId)} type="submit">
+          <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-60" disabled={isCreating || !dueDate || !title.trim() || !classId} type="submit">
             {isCreating && <Loader2 className="size-4 animate-spin" />}
-            {isCreating ? "Creating assignments..." : audience === "class" ? `Assign individually to ${classes.find((item) => item.id === classId)?.name ?? "class"}` : "Create assignment streak"}
+            {isCreating ? "Creating assignments..." : `Publish to ${classes.find((item) => item.id === classId)?.name ?? "class"}`}
           </button>
         )}
       </form>

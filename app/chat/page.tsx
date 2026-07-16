@@ -14,7 +14,6 @@ import { useRouter } from "next/navigation";
 import { useContext, useState } from "react";
 
 import AuthContext from "@/app/components/AuthContext";
-import CreateGroupModal from "@/app/components/CreateGroupModal";
 import CreateStreakModal from "@/app/components/CreateStreakModal";
 import GroupChatPage from "@/app/components/GroupChatPage";
 import ManageClassesModal from "@/app/components/ManageClassesModal";
@@ -32,7 +31,6 @@ export default function ChatPage() {
   const router = useRouter();
   const [view, setView] = useState<ChatView>("individual");
   const [openStreakModal, setOpenStreakModal] = useState(false);
-  const [openGroupModal, setOpenGroupModal] = useState(false);
   const [openClassesModal, setOpenClassesModal] = useState(false);
   const [streakReminder, setStreakReminder] = useState(false);
   const [reminderMessage, setReminderMessage] = useState("");
@@ -76,6 +74,7 @@ export default function ChatPage() {
             </div>
           </div>
 
+          {!isAdministrator && (
           <div className="hidden items-center gap-1 rounded-full border-2 border-black bg-white p-1 md:flex">
             <button
               className={`rounded-full px-5 py-2 text-sm font-extrabold transition ${
@@ -96,6 +95,7 @@ export default function ChatPage() {
               Group projects
             </button>
           </div>
+          )}
 
           <div className="flex items-center gap-2">
             <button
@@ -151,6 +151,7 @@ export default function ChatPage() {
             </p>
           </div>
 
+          {!isAdministrator && (
           <div className="flex items-center gap-3 rounded-[1.75rem] border-2 border-black bg-[#fffc00] px-4 py-3 shadow-[5px_5px_0_#111] sm:min-w-72">
             <div className="flex size-12 shrink-0 items-center justify-center rounded-full border-2 border-black bg-[#ff5b35] text-white">
               <Flame className="size-7 fill-current" />
@@ -168,6 +169,7 @@ export default function ChatPage() {
               </p>
             </div>
           </div>
+          )}
         </section>
 
         <section className="social-workspace overflow-hidden border-2 border-black bg-white shadow-[7px_7px_0_#111]">
@@ -179,10 +181,10 @@ export default function ChatPage() {
               </span>
               <div>
                 <h2 className="font-black tracking-tight">
-                  {view === "individual" ? (isAdministrator ? "Assignment pulse" : "Assignment stories") : "Project circles"}
+                  {isAdministrator ? "Classes" : "Project circles"}
                 </h2>
                 <p className="text-xs font-medium text-zinc-500">
-                  {view === "individual" ? "Ordered by what needs attention first" : "Shared work, messages, and progress"}
+                  {isAdministrator ? "Assignments, class progress, and student questions" : "Shared work, messages, and progress"}
                 </p>
               </div>
             </div>
@@ -202,19 +204,12 @@ export default function ChatPage() {
                   <CreateStreakModal setOpen={setOpenStreakModal} />
                 </Dialog>
               </div>
-            ) : isAdministrator && view === "groups" ? (
-              <Dialog open={openGroupModal} onOpenChange={setOpenGroupModal}>
-                <DialogTrigger render={<Button className="h-10 rounded-full border-2 border-black bg-[#fffc00] px-4 font-black text-black hover:bg-[#f3ef00]" />}>
-                  <Plus /> Start group project
-                </DialogTrigger>
-                <CreateGroupModal setOpen={setOpenGroupModal} />
-              </Dialog>
             ) : null}
           </div>
           )}
 
           <div className="p-2 sm:p-4">
-            {view === "groups" ? (
+            {!isAdministrator && view === "groups" ? (
               <GroupChatPage />
             ) : (
               <StreakPage
@@ -227,6 +222,7 @@ export default function ChatPage() {
         </section>
       </main>
 
+      {!isAdministrator && (
       <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-3 border-t-2 border-black bg-white px-3 pb-[max(0.55rem,env(safe-area-inset-bottom))] pt-2 md:hidden">
         <button className={`flex flex-col items-center gap-1 text-[10px] font-black ${view === "individual" ? "text-black" : "text-zinc-400"}`} onClick={() => setView("individual")} type="button">
           <Flame className={`size-5 ${view === "individual" ? "fill-[#ff5b35] text-[#ff5b35]" : ""}`} /> Streaks
@@ -238,6 +234,7 @@ export default function ChatPage() {
           <MessageCircleMore className="size-5" /> Projects
         </button>
       </nav>
+      )}
 
       <Dialog open={streakReminder} onOpenChange={setStreakReminder}>
         <StreakReminderModal reminderMessage={reminderMessage} />
