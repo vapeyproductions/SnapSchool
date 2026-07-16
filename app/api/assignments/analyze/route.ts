@@ -126,9 +126,11 @@ export async function POST(request: Request) {
     const description = String(formData.get("description") ?? "").trim();
     const teacherDueDate = String(formData.get("dueDate") ?? "").trim();
     const groupWorkerCountRaw = String(formData.get("groupWorkerCount") ?? "").trim();
+    const groupCountRaw = String(formData.get("groupCount") ?? "").trim();
     const groupWorkerCount = groupWorkerCountRaw
       ? Number.parseInt(groupWorkerCountRaw, 10)
       : 1;
+    const groupCount = groupCountRaw ? Number.parseInt(groupCountRaw, 10) : 1;
     const fileValue = formData.get("file");
     const file = fileValue instanceof File && fileValue.size > 0 ? fileValue : null;
 
@@ -136,6 +138,7 @@ export async function POST(request: Request) {
     if (description.length > 12000) return errorResponse("The description must be 12,000 characters or less", 400);
     if (teacherDueDate && !/^\d{4}-\d{2}-\d{2}$/.test(teacherDueDate)) return errorResponse("Enter a valid due date", 400);
     if (!Number.isInteger(groupWorkerCount) || groupWorkerCount < 1 || groupWorkerCount > 100) return errorResponse("Enter a valid group size", 400);
+    if (!Number.isInteger(groupCount) || groupCount < 1 || groupCount > 30) return errorResponse("Enter a valid number of groups", 400);
     if (file && file.size > MAX_FILE_BYTES) return errorResponse("The uploaded file must be 10 MB or smaller", 400);
     if (file && !IMAGE_TYPES.has(file.type) && !DOCUMENT_TYPES.has(file.type)) {
       return errorResponse("Upload a PNG, JPEG, WebP, GIF, PDF, Word, or text file", 400);
@@ -145,7 +148,7 @@ export async function POST(request: Request) {
       text:
         `Analyze this school assignment for a teacher. Today is ${new Date().toISOString().slice(0, 10)}.\n` +
         `Teacher-provided due date: ${teacherDueDate || "none"}. A teacher-provided date overrides any date found in the source.\n` +
-        `Number of people completing this assignment together: ${groupWorkerCount}.\n` +
+        `This plan will be shared once across ${groupCount} group${groupCount === 1 ? "" : "s"}. The smallest group has ${groupWorkerCount} student workers, so make every step achievable by that group size.\n` +
         `Teacher description: ${description || "none"}.\n\n` +
         "Extract a concise title and the actual deliverables. Estimate realistic student work time. " +
         "Classify the work as essay, exam, homework, other, project, quiz, reading, or test. " +

@@ -755,6 +755,175 @@ export const createClassAssignment = async (data: {
   }
 };
 
+export const createClassGroupAssignment = async (data: {
+  administratorUsernames?: string[];
+  classId: string;
+  firebaseIdToken: string;
+  groups: string[][];
+  plan: AssignmentPlan;
+  requestId: string;
+  title: string;
+}) => {
+  try {
+    const administrator = await authenticateCaller(data.firebaseIdToken);
+    if (administrator.role !== "administrator") {
+      return {
+        createdCount: 0,
+        error: "Only administrators can publish group assignments",
+        success: false,
+      };
+    }
+
+    const title = data.title.trim();
+    const planData = validateAssignmentPlan(data.plan);
+    const requestId = data.requestId.replaceAll("-", "").toLowerCase();
+    if (title.length < 3 || title.length > 100) {
+      throw new Error("Assignment titles must be between 3 and 100 characters");
+    }
+    if (!/^[a-f0-9]{32}$/.test(requestId)) {
+      throw new Error("This assignment request is invalid. Close the form and try again.");
+    }
+
+    const groups = data.groups.map((group) => [
+      ...new Set(
+        group
+          .map((username) => username.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    ]);
+    if (groups.length === 0 || groups.length > 30) {
+      throw new Error("Create between 1 and 30 groups");
+    }
+    if (groups.some((group) => group.length < 2 || group.length > 20)) {
+      throw new Error("Each group must contain between 2 and 20 students");
+    }
+
+    const allUsernames = groups.flat();
+    const uniqueUsernames = [...new Set(allUsernames)];
+    if (uniqueUsernames.length !== allUsernames.length) {
+      throw new Error("Each student can appear in only one group for this assignment");
+    }
+
+    const schoolClass = await getSchoolClass(data.firebaseIdToken, data.classId);
+    if (!schoolClass.administratorIds.includes(administrator.uid)) {
+      throw new Error("You do not have permission to publish work to this class");
+    }
+    const classRoster = new Set(schoolClass.studentUsernames);
+    const outsideClass = uniqueUsernames.find((username) => !classRoster.has(username));
+    if (outsideClass) {
+      throw new Error(`The student "${outsideClass}" is not in ${schoolClass.name}`);
+    }
+
+    const students = await Promise.all(
+      uniqueUsernames.map((username) => getProfile(data.firebaseIdToken, username)),
+    );
+    const invalidStudent = students.find((profile) => profile.role !== "student");
+    if (invalidStudent) {
+      throw new Error(`The account "${invalidStudent.username}" is not a student`);
+    }
+    const administratorUsernames = [
+      ...new Set(
+        (data.administratorUsernames ?? [])
+          .map((username) => username.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    ];
+    const additionalAdministrators = await Promise.all(
+      administratorUsernames.map((username) =>
+        getProfile(data.firebaseIdToken, username),
+      ),
+    );
+    const invalidAdministrator = additionalAdministrators.find(
+      (profile) => profile.role !== "administrator",
+    );
+    if (invalidAdministrator) {
+      throw new Error(
+        `The account "${invalidAdministrator.username}" is not an administrator`,
+      );
+    }
+    const outsideClassAdministrator = additionalAdministrators.find(
+      (profile) => !schoolClass.administratorIds.includes(profile.uid),
+    );
+    if (outsideClassAdministrator) {
+      throw new Error(
+        `The administrator "${outsideClassAdministrator.username}" is not assigned to ${schoolClass.name}`,
+      );
+    }
+    const administratorIds = [
+      ...new Set([
+        administrator.uid,
+        ...additionalAdministrators.map((profile) => profile.uid),
+      ]),
+    ];
+    const studentsByUsername = new Map(
+      students.map((student) => [student.username, student]),
+    );
+    const batchId = requestId.slice(0, 12);
+    const slug = title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 25) || "assignment";
+
+    const results = await Promise.allSettled(
+      groups.map(async (group, index) => {
+        const groupStudents = group.map((username) => {
+          const student = studentsByUsername.get(username);
+          if (!student) throw new Error(`The student "${username}" could not be loaded`);
+          return student;
+        });
+        const groupName = `Group ${index + 1}`;
+        const channel = serverClient.channel(
+          "livestream",
+          `group-${slug}-${batchId}-${index + 1}`,
+          {
+            ...planData,
+            assignment_title: title,
+            assignment_type: "group",
+            class_id: schoolClass.id,
+            class_name: schoolClass.name,
+            created_by_id: administrator.uid,
+            group_administrator_ids: JSON.stringify(administratorIds),
+            group_assignment_batch_id: batchId,
+            group_name: groupName,
+            group_student_ids: JSON.stringify(
+              groupStudents.map((student) => student.uid),
+            ),
+            members: [
+              ...administratorIds,
+              ...groupStudents.map((student) => student.uid),
+            ],
+            name: `${title} · ${groupName}`,
+          },
+        );
+        await channel.create();
+      }),
+    );
+    const createdCount = results.filter(
+      (result) => result.status === "fulfilled",
+    ).length;
+
+    if (createdCount !== groups.length) {
+      return {
+        createdCount,
+        error: `Created ${createdCount} of ${groups.length} groups. Retry to complete the missing groups.`,
+        success: false,
+      };
+    }
+
+    return { createdCount, error: null, success: true };
+  } catch (error) {
+    return {
+      createdCount: 0,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Unable to publish the group assignment",
+      success: false,
+    };
+  }
+};
+
 export const createAssignmentChannel = async (
   data: AssignmentChannelArgs,
 ) => {

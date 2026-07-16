@@ -25,7 +25,9 @@ declare module "stream-chat" {
     due_date?: string;
     estimated_total_minutes?: number;
     group_administrator_ids?: string;
+    group_assignment_batch_id?: string;
     group_contributions?: string;
+    group_name?: string;
     group_student_ids?: string;
     last_progress_at?: string;
     last_progress_confidence?: "high" | "medium" | "low";

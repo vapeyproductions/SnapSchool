@@ -172,7 +172,30 @@ export async function POST(request: Request) {
       return errorResponse("This conversation does not have an AI assignment plan", 400);
     }
     const isGroupAssignment = channel.data.assignment_type === "group";
-    const groupMemberCount = Object.keys(channel.state.members).length;
+    let groupMemberCount = 0;
+    if (isGroupAssignment && typeof channel.data.group_student_ids === "string") {
+      try {
+        const studentIds = JSON.parse(channel.data.group_student_ids) as string[];
+        groupMemberCount = Array.isArray(studentIds) ? studentIds.length : 0;
+      } catch {
+        groupMemberCount = 0;
+      }
+    }
+    if (isGroupAssignment && groupMemberCount === 0) {
+      const administratorIds = new Set<string>();
+      if (typeof channel.data.group_administrator_ids === "string") {
+        try {
+          const parsed = JSON.parse(channel.data.group_administrator_ids) as string[];
+          if (Array.isArray(parsed)) parsed.forEach((id) => administratorIds.add(id));
+        } catch {
+          // Fall back to counting all members except the assignment creator.
+        }
+      }
+      if (channel.data.created_by_id) administratorIds.add(channel.data.created_by_id);
+      groupMemberCount = Object.keys(channel.state.members).filter(
+        (memberId) => !administratorIds.has(memberId),
+      ).length;
+    }
     let groupContributions: Record<string, GroupContribution> = {};
     if (isGroupAssignment && typeof channel.data.group_contributions === "string") {
       try {

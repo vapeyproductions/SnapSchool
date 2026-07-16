@@ -186,6 +186,10 @@ function AssignmentManagement({
   const [isDeleting, setIsDeleting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const channelCids = assignment.channels.map((channel) => channel.cid);
+  const isGroupAssignment = assignment.channels.some(
+    (channel) => channel.data?.assignment_type === "group",
+  );
+  const assignmentUnit = isGroupAssignment ? "group" : "student";
   const assignmentSummary =
     assignment.channels[0]?.data?.assignment_summary || "No summary provided.";
 
@@ -251,7 +255,7 @@ function AssignmentManagement({
           <DialogHeader>
             <DialogTitle>Edit shared assignment</DialogTitle>
             <DialogDescription>
-              Changes apply to every assigned student. Individual progress and AI-recalibrated plans are preserved.
+              Changes apply to every assigned {assignmentUnit}. Progress and AI-recalibrated plans are preserved.
             </DialogDescription>
           </DialogHeader>
           <form className="space-y-4" onSubmit={saveAssignment}>
@@ -281,7 +285,7 @@ function AssignmentManagement({
             {errorMessage && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700" role="alert">{errorMessage}</p>}
             <Button className="w-full rounded-xl bg-black py-3 font-black text-white" disabled={isSaving} type="submit">
               {isSaving && <Loader2 className="size-4 animate-spin" />}
-              {isSaving ? "Updating assignment…" : `Update for ${assignment.channels.length} student${assignment.channels.length === 1 ? "" : "s"}`}
+              {isSaving ? "Updating assignment…" : `Update for ${assignment.channels.length} ${assignmentUnit}${assignment.channels.length === 1 ? "" : "s"}`}
             </Button>
           </form>
         </DialogContent>
@@ -295,7 +299,7 @@ function AssignmentManagement({
           <DialogHeader>
             <DialogTitle>Delete {assignment.title}?</DialogTitle>
             <DialogDescription>
-              This removes the shared assignment for all {assignment.channels.length} assigned student{assignment.channels.length === 1 ? "" : "s"}, including its conversations and submitted evidence.
+              This removes the shared assignment for all {assignment.channels.length} assigned {assignmentUnit}{assignment.channels.length === 1 ? "" : "s"}, including its conversations and submitted evidence.
             </DialogDescription>
           </DialogHeader>
           <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800">
@@ -468,6 +472,7 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
   const [channels, setChannels] = useState<StreamChannel[]>([]);
   const [selectedClassId, setSelectedClassId] = useState("");
   const [selectedAssignmentKey, setSelectedAssignmentKey] = useState("");
+  const [selectedGroupChannelCid, setSelectedGroupChannelCid] = useState("");
   const [replyChannelCid, setReplyChannelCid] = useState("");
   const [tab, setTab] = useState<DashboardTab>("overview");
   const [loading, setLoading] = useState(true);
@@ -545,7 +550,9 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
         const title = channel.data?.assignment_title || channel.data?.name || "Assignment";
         const dueDate = channel.data?.original_due_date ?? channel.data?.due_date;
         const kind = channel.data?.assignment_kind || "assignment";
-        const key = `${title}:${dueDate ?? "none"}:${kind}`;
+        const key = channel.data?.group_assignment_batch_id
+          ? `group:${channel.data.group_assignment_batch_id}`
+          : `${title}:${dueDate ?? "none"}:${kind}`;
         const existing = groups.get(key);
 
         if (existing) {
@@ -571,6 +578,11 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
     (assignment) => assignment.key === effectiveAssignmentKey,
   );
   const selectedClass = classes.find((schoolClass) => schoolClass.id === selectedClassId);
+  const groupAssignmentChannels =
+    selectedAssignment?.channels.filter(
+      (channel) => channel.data?.assignment_type === "group",
+    ) ?? [];
+  const isGroupAssignment = groupAssignmentChannels.length > 0;
   const averageProgress = selectedAssignment
     ? Math.round(
         selectedAssignment.channels.reduce(
@@ -624,9 +636,10 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
   const replyChannel = selectedAssignment?.channels.find(
     (channel) => channel.cid === replyChannelCid,
   );
-  const groupAssignmentChannel = selectedAssignment?.channels.find(
-    (channel) => channel.data?.assignment_type === "group",
-  );
+  const groupAssignmentChannel =
+    groupAssignmentChannels.find(
+      (channel) => channel.cid === selectedGroupChannelCid,
+    ) ?? groupAssignmentChannels[0];
 
   if (!client || loading) return <LoadingDashboard />;
 
@@ -643,7 +656,11 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
               const assignmentCount = channels.filter(
                 (channel) => channel.data?.class_id === schoolClass.id,
               ).reduce((keys, channel) => {
-                keys.add(`${channel.data?.assignment_title}:${channel.data?.due_date}`);
+                keys.add(
+                  channel.data?.group_assignment_batch_id
+                    ? `group:${channel.data.group_assignment_batch_id}`
+                    : `${channel.data?.assignment_title}:${channel.data?.due_date}`,
+                );
                 return keys;
               }, new Set<string>()).size;
 
@@ -659,6 +676,7 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
                     setSelectedClassId(schoolClass.id);
                     setTab("overview");
                     setReplyChannelCid("");
+                    setSelectedGroupChannelCid("");
                   }}
                   type="button"
                 >
@@ -716,6 +734,7 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
                       setSelectedAssignmentKey(assignment.key);
                       setTab("overview");
                       setReplyChannelCid("");
+                      setSelectedGroupChannelCid("");
                     }}
                     type="button"
                   >
@@ -770,7 +789,10 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
                       <span>·</span>
                       <span className="flex items-center gap-1"><CalendarDays className="size-3.5" /> Due {formatDueDate(selectedAssignment.dueDate)}</span>
                       <span>·</span>
-                      <span>{selectedAssignment.channels.length} students</span>
+                      <span>
+                        {selectedAssignment.channels.length} {isGroupAssignment ? "group" : "student"}
+                        {selectedAssignment.channels.length === 1 ? "" : "s"}
+                      </span>
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center justify-end gap-3">
@@ -804,7 +826,9 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
                           }),
                         );
                         setSelectedAssignmentKey(
-                          `${update.title}:${update.dueDate}:${update.assignmentKind}`,
+                          selectedAssignment.channels[0]?.data?.group_assignment_batch_id
+                            ? `group:${selectedAssignment.channels[0].data.group_assignment_batch_id}`
+                            : `${update.title}:${update.dueDate}:${update.assignmentKind}`,
                         );
                       }}
                       user={user}
@@ -820,9 +844,9 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
                   {([
                     ["overview", "Overview"],
                     ["messages", `Notifications (${messageThreads.length})`],
-                    ["progress", "Student progress"],
+                    ["progress", isGroupAssignment ? "Group progress" : "Student progress"],
                     ...(groupAssignmentChannel
-                      ? [["group-chat", "Group chat"] as const]
+                      ? [["group-chat", "Group chats"] as const]
                       : []),
                   ] as const).map(([value, label]) => (
                     <button
@@ -843,7 +867,9 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
                     <div className="flex items-end justify-between gap-3">
                       <div>
                         <p className="text-sm font-black">Overall class progress</p>
-                        <p className="mt-1 text-xs text-zinc-500">Average completed streak steps across assigned students</p>
+                        <p className="mt-1 text-xs text-zinc-500">
+                          Average completed streak steps across assigned {isGroupAssignment ? "groups" : "students"}
+                        </p>
                       </div>
                       <p className="text-2xl font-black">{averageProgress}%</p>
                     </div>
@@ -882,7 +908,7 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
                       onClick={() => setTab("messages")}
                       type="button"
                     >
-                      <span><strong className="block">{messageThreads.length} student message thread{messageThreads.length === 1 ? "" : "s"}</strong><span className="text-xs">Open the notification inbox to respond.</span></span>
+                      <span><strong className="block">{messageThreads.length} {isGroupAssignment ? "teacher request" : "student message thread"}{messageThreads.length === 1 ? "" : "s"}</strong><span className="text-xs">Open the notification inbox to respond.</span></span>
                       <Inbox className="size-6" />
                     </button>
                   )}
@@ -969,11 +995,31 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
 
               {tab === "group-chat" && groupAssignmentChannel && (
                 <section className="min-h-[34rem] bg-white">
+                  {groupAssignmentChannels.length > 1 && (
+                    <div className="flex gap-2 overflow-x-auto border-b-2 border-black bg-[#f4f0e8] p-3">
+                      {groupAssignmentChannels.map((channel, index) => (
+                        <button
+                          className={`shrink-0 rounded-full border-2 border-black px-4 py-2 text-xs font-black ${
+                            groupAssignmentChannel.cid === channel.cid
+                              ? "bg-black text-white"
+                              : "bg-white text-black"
+                          }`}
+                          key={channel.cid}
+                          onClick={() => setSelectedGroupChannelCid(channel.cid)}
+                          type="button"
+                        >
+                          {channel.data?.group_name || `Group ${index + 1}`}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <Channel channel={groupAssignmentChannel}>
                     <Window>
                       <div className="flex flex-wrap items-start justify-between gap-3 border-b-2 border-black bg-[#c7b7ff] px-4 py-3">
                         <div>
-                          <p className="font-black">Group assignment chat</p>
+                          <p className="font-black">
+                            {groupAssignmentChannel.data?.group_name || "Group"} assignment chat
+                          </p>
                           <p className="text-xs">
                             View team coordination without receiving notifications for ordinary group messages.
                           </p>
@@ -1027,7 +1073,7 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
                       const urgent = isStudentOverdue(channel, todayString);
                       const progressOwner =
                         channel.data?.assignment_type === "group"
-                          ? "Shared group progress"
+                          ? channel.data?.group_name || "Group progress"
                           : studentName(channel);
                       const groupContributions = parseGroupContributions(channel);
                       const groupStudentIds = parseStringArray(

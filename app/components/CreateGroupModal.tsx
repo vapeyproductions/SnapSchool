@@ -4,7 +4,7 @@ import { Loader2, School, Sparkles } from "lucide-react";
 import { type Dispatch, useContext, useEffect, useState } from "react";
 
 import {
-  createAssignmentChannel,
+  createClassGroupAssignment,
   getAdministratorClasses,
   type SchoolClassSummary,
 } from "@/actions/stream";
@@ -23,8 +23,10 @@ export default function CreateGroupModal({
   setOpen: Dispatch<React.SetStateAction<boolean>>;
 }) {
   const { role, user } = useContext(AuthContext);
+  const [assignmentRequestId, setAssignmentRequestId] = useState(() => crypto.randomUUID());
   const [classes, setClasses] = useState<SchoolClassSummary[]>([]);
   const [classId, setClassId] = useState("");
+  const [administrators, setAdministrators] = useState("");
   const [isLoadingClasses, setIsLoadingClasses] = useState(true);
   const [members, setMembers] = useState("");
   const [description, setDescription] = useState("");
@@ -35,6 +37,19 @@ export default function CreateGroupModal({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+
+  const parseGroups = () =>
+    members
+      .split(/\r?\n/)
+      .map((line) => [
+        ...new Set(
+          line
+            .split(",")
+            .map((member) => member.trim().toLowerCase())
+            .filter(Boolean),
+        ),
+      ])
+      .filter((group) => group.length > 0);
 
   useEffect(() => {
     if (!user || role !== "administrator") return;
@@ -75,16 +90,9 @@ export default function CreateGroupModal({
       setErrorMessage("Add a description or upload the assignment instructions");
       return;
     }
-    const invitedUsernames = [
-      ...new Set(
-        members
-          .split(",")
-          .map((member) => member.trim().toLowerCase())
-          .filter(Boolean),
-      ),
-    ];
-    if (invitedUsernames.length < 2) {
-      setErrorMessage("Add at least two group members before analyzing the assignment");
+    const groups = parseGroups();
+    if (groups.length === 0 || groups.some((group) => group.length < 2)) {
+      setErrorMessage("Add at least one group with two students before analyzing the assignment");
       return;
     }
 
@@ -93,7 +101,11 @@ export default function CreateGroupModal({
       const formData = new FormData();
       formData.set("description", description.trim());
       formData.set("dueDate", dueDate);
-      formData.set("groupWorkerCount", String(invitedUsernames.length + 1));
+      formData.set(
+        "groupWorkerCount",
+        String(Math.min(...groups.map((group) => group.length))),
+      );
+      formData.set("groupCount", String(groups.length));
       if (file) formData.set("file", file);
       const response = await fetch("/api/assignments/analyze", {
         body: formData,
@@ -121,12 +133,15 @@ export default function CreateGroupModal({
 
     setIsCreating(true);
     try {
-      const usernames = [...new Set(members.split(",").map((member) => member.trim().toLowerCase()).filter(Boolean))];
-      const { success, error } = await createAssignmentChannel({
-        assignmentType: "group",
+      const groups = parseGroups();
+      const { success, error } = await createClassGroupAssignment({
+        administratorUsernames: administrators
+          .split(",")
+          .map((username) => username.trim().toLowerCase())
+          .filter(Boolean),
         classId,
         firebaseIdToken: await user.getIdToken(),
-        memberUsernames: usernames,
+        groups,
         plan: {
           assignmentKind: analysis.assignmentKind,
           assignmentSummary: analysis.assignmentSummary,
@@ -135,9 +150,13 @@ export default function CreateGroupModal({
           estimatedTotalMinutes: analysis.estimatedTotalMinutes,
           recommendedWorkDays: analysis.recommendedWorkDays,
         },
+        requestId: assignmentRequestId,
         title: title.trim(),
       });
-      if (success) return setOpen(false);
+      if (success) {
+        setAssignmentRequestId(crypto.randomUUID());
+        return setOpen(false);
+      }
       setErrorMessage(error ?? "Unable to create the group assignment");
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Unable to create the group assignment");
@@ -165,15 +184,28 @@ export default function CreateGroupModal({
           )}
           {!isLoadingClasses && classes.length === 0 && <span className="block text-xs text-amber-700">Create a class before starting a group assignment.</span>}
         </label>
-        <label className="block space-y-2 text-sm font-medium">Student and administrator usernames<input className="w-full rounded-xl border border-slate-300 px-3 py-2.5" onChange={(event) => setMembers(event.target.value)} placeholder="alex, ms.jones, taylor" required value={members} /><span className="block text-xs font-normal text-slate-500">Comma-separated. You are added automatically.</span></label>
+        <label className="block space-y-2 text-sm font-medium">
+          Student groups
+          <textarea className="min-h-32 w-full rounded-xl border border-slate-300 px-3 py-2.5" onChange={(event) => { setMembers(event.target.value); setAnalysis(null); }} placeholder={"alex, jordan, taylor\nsam, casey, morgan\nriley, jamie"} required value={members} />
+          <span className="block text-xs font-normal leading-5 text-slate-500">
+            Enter one group per line and separate student usernames with commas. Each student can appear in only one group. You are automatically added to every group chat.
+          </span>
+        </label>
+        <label className="block space-y-2 text-sm font-medium">
+          Additional administrators (optional)
+          <input className="w-full rounded-xl border border-slate-300 px-3 py-2.5" onChange={(event) => setAdministrators(event.target.value)} placeholder="ms.smith, mr.lee" value={administrators} />
+          <span className="block text-xs font-normal text-slate-500">
+            Enter class administrators once, separated by commas. They will join every group chat.
+          </span>
+        </label>
         <label className="block space-y-2 text-sm font-medium">Assignment description<textarea className="min-h-28 w-full rounded-xl border border-slate-300 px-3 py-2.5" maxLength={12000} onChange={(event) => setDescription(event.target.value)} placeholder="Describe the group requirements, or upload them below." value={description} /></label>
         <label className="block space-y-2 text-sm font-medium">Screenshot or document (optional)<input accept=".gif,.jpeg,.jpg,.pdf,.png,.txt,.webp,.doc,.docx" className="block w-full rounded-xl border border-dashed border-indigo-300 p-3 text-xs" onChange={(event) => setFile(event.target.files?.[0] ?? null)} type="file" /><span className="block text-xs font-normal text-slate-500">Maximum 10 MB. Avoid student names, grades, or private information.</span></label>
         <label className="block space-y-2 text-sm font-medium">Due date (optional before analysis)<input className="w-full rounded-xl border border-slate-300 px-3 py-2.5" min={new Date().toISOString().slice(0, 10)} onChange={(event) => setDueDate(event.target.value)} type="date" value={dueDate} /></label>
         <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 font-medium text-white disabled:opacity-60" disabled={isAnalyzing || (!description.trim() && !file)} onClick={() => void analyzeAssignment()} type="button">{isAnalyzing ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}{isAnalyzing ? "Analyzing assignment..." : analysis ? "Analyze again" : "Analyze with AI"}</button>
 
-        {analysis && <section className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4"><p className="font-semibold">Review the suggested plan</p><p className="text-xs text-slate-600">AI estimates can be wrong. Confirm everything before creating the project.</p><label className="block space-y-2 text-sm font-medium">Project title<input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5" maxLength={100} minLength={3} onChange={(event) => setTitle(event.target.value)} required value={title} /></label><label className="block space-y-2 text-sm font-medium">Due date (required)<input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5" min={new Date().toISOString().slice(0, 10)} onChange={(event) => setDueDate(event.target.value)} required type="date" value={dueDate} /></label><div className="grid grid-cols-2 gap-2 text-sm"><div className="rounded-xl bg-white p-3"><span className="block text-slate-500">Effort</span><strong>{analysis.estimatedTotalMinutes} min</strong></div><div className="rounded-xl bg-white p-3"><span className="block text-slate-500">Streak target</span><strong>{analysis.recommendedWorkDays} days</strong></div></div><p className="text-sm leading-6 text-slate-600">{analysis.assignmentSummary}</p><ol className="space-y-2">{analysis.dailyTasks.map((task) => <li className="rounded-xl bg-white p-3 text-sm" key={task.dayNumber}><strong>Day {task.dayNumber}: {task.title}</strong><span className="float-right text-slate-500">{task.estimatedMinutes} min</span><p className="mt-1 text-slate-600">{task.description}</p></li>)}</ol></section>}
+        {analysis && <section className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4"><p className="font-semibold">Review the suggested plan</p><p className="text-xs text-slate-600">AI estimates can be wrong. Confirm everything before publishing the assignment.</p><label className="block space-y-2 text-sm font-medium">Assignment title<input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5" maxLength={100} minLength={3} onChange={(event) => setTitle(event.target.value)} required value={title} /></label><label className="block space-y-2 text-sm font-medium">Due date (required)<input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5" min={new Date().toISOString().slice(0, 10)} onChange={(event) => setDueDate(event.target.value)} required type="date" value={dueDate} /></label><div className="grid grid-cols-2 gap-2 text-sm"><div className="rounded-xl bg-white p-3"><span className="block text-slate-500">Effort</span><strong>{analysis.estimatedTotalMinutes} min</strong></div><div className="rounded-xl bg-white p-3"><span className="block text-slate-500">Streak target</span><strong>{analysis.recommendedWorkDays} days</strong></div></div><p className="text-sm leading-6 text-slate-600">{analysis.assignmentSummary}</p><ol className="space-y-2">{analysis.dailyTasks.map((task) => <li className="rounded-xl bg-white p-3 text-sm" key={task.dayNumber}><strong>Day {task.dayNumber}: {task.title}</strong><span className="float-right text-slate-500">{task.estimatedMinutes} min</span><p className="mt-1 text-slate-600">{task.description}</p></li>)}</ol></section>}
         {errorMessage && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{errorMessage}</p>}
-        {analysis && <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white disabled:opacity-60" disabled={isCreating || !classId || !dueDate || !title.trim()} type="submit">{isCreating && <Loader2 className="size-4 animate-spin" />}{isCreating ? "Creating assignment..." : "Create group assignment"}</button>}
+        {analysis && <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white disabled:opacity-60" disabled={isCreating || !classId || !dueDate || !title.trim()} type="submit">{isCreating && <Loader2 className="size-4 animate-spin" />}{isCreating ? "Publishing groups..." : `Publish assignment to ${parseGroups().length} group${parseGroups().length === 1 ? "" : "s"}`}</button>}
       </form>
     </DialogContent>
   );
