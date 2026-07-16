@@ -130,16 +130,27 @@ export function PriorityAssignmentList({
           channel.data?.assignment_title ||
           channel.data?.name ||
           "Assignment";
+        const dailyStepDone =
+          priority.progressMadeToday &&
+          !channel.data?.late_amendment &&
+          priority.paceStatus !== "behind" &&
+          (priority.daysUntilDue === null || priority.daysUntilDue > 0);
         const urgencyLabel =
           channel.data?.late_amendment
             ? "SUPER URGENT"
             : priority.daysUntilDue !== null && priority.daysUntilDue < 0
             ? "EXTREMELY URGENT"
-            : priority.urgency === "critical"
-              ? "Do next"
-              : priority.urgency === "high"
-                ? "High priority"
-                : "On track";
+            : dailyStepDone
+              ? "Today’s step done"
+              : priority.paceStatus === "ahead"
+                ? "Ahead of plan"
+                : priority.paceStatus === "on-track"
+                  ? "On pace"
+                  : priority.urgency === "critical"
+                    ? "Do next"
+                    : priority.urgency === "high"
+                      ? "High priority"
+                      : "On track";
 
         return (
           <button
@@ -165,7 +176,9 @@ export function PriorityAssignmentList({
                 </span>
                 {currentMission?.title && (
                   <span className="mt-0.5 block truncate text-xs font-semibold text-slate-600">
-                    Today: {currentMission.title}
+                    {dailyStepDone
+                      ? "Today’s goal completed"
+                      : `Today: ${currentMission.title}`}
                   </span>
                 )}
               </span>
@@ -200,7 +213,7 @@ export function PriorityAssignmentList({
               <span className="flex items-center gap-1.5">
                 <Clock3 className="size-3.5 shrink-0" />
                 {typeof currentMission?.estimatedMinutes === "number"
-                  ? `Today · ${currentMission.estimatedMinutes} min`
+                  ? `${dailyStepDone ? "Next step" : "Today"} · ${currentMission.estimatedMinutes} min`
                   : `${priority.remainingMinutes} min remaining`}
               </span>
               {priority.streakStatus === "missed" && (
@@ -209,6 +222,21 @@ export function PriorityAssignmentList({
                 </span>
               )}
             </span>
+
+            {priority.targetDays > 0 && priority.completedDays > 0 && (
+              <span className="mt-2 block">
+                <span className="flex items-center justify-between gap-2 text-[11px] font-bold text-slate-600">
+                  <span>{priority.completedDays} of {priority.targetDays} daily steps complete</span>
+                  <span>{priority.completionPercent}%</span>
+                </span>
+                <span className="mt-1 block h-2 overflow-hidden rounded-full border border-black/20 bg-white/70">
+                  <span
+                    className="block h-full rounded-full bg-emerald-500 transition-[width]"
+                    style={{ width: `${priority.completionPercent}%` }}
+                  />
+                </span>
+              </span>
+            )}
           </button>
           );
         })}

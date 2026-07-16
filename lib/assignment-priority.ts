@@ -19,12 +19,17 @@ export type AssignmentPriority = {
     text: string;
   };
   completed: boolean;
+  completedDays: number;
+  completionPercent: number;
   daysUntilDue: number | null;
   dueLabel: string;
   minutesPerAvailableDay: number;
+  paceStatus: "ahead" | "behind" | "complete" | "not-started" | "on-track";
+  progressMadeToday: boolean;
   remainingMinutes: number;
   score: number;
   streakStatus: "active" | "missed" | "not-started";
+  targetDays: number;
   urgency: "complete" | "critical" | "high" | "normal";
 };
 
@@ -74,6 +79,34 @@ export const getAssignmentPriority = (
   const completed = targetDays > 0 && completedDays >= targetDays;
   const availableDays = daysUntilDue === null ? 14 : Math.max(1, daysUntilDue + 1);
   const minutesPerAvailableDay = remainingMinutes / availableDays;
+  const remainingPlanDays = Math.max(0, targetDays - completedDays);
+  const completionPercent = targetDays > 0
+    ? Math.min(100, Math.round((completedDays / targetDays) * 100))
+    : 0;
+
+  const lastProgressTime = data.last_progress_at
+    ? new Date(data.last_progress_at).getTime()
+    : Number.NaN;
+  const daysSinceProgress = Number.isNaN(lastProgressTime)
+    ? null
+    : Math.floor((today - startOfUTCDay(new Date(lastProgressTime))) / 86400000);
+  const progressMadeToday = daysSinceProgress === 0;
+  const streakStatus: AssignmentPriority["streakStatus"] = completedDays === 0
+    ? "not-started"
+    : daysSinceProgress !== null && daysSinceProgress > 1
+      ? "missed"
+      : "active";
+  const onSchedule =
+    daysUntilDue === null || remainingPlanDays <= availableDays;
+  const paceStatus: AssignmentPriority["paceStatus"] = completed
+    ? "complete"
+    : completedDays === 0
+      ? "not-started"
+      : !onSchedule || streakStatus === "missed"
+        ? "behind"
+        : remainingPlanDays < availableDays
+          ? "ahead"
+          : "on-track";
 
   let score = minutesPerAvailableDay;
   if (data.late_amendment && !completed) score += 2_000_000;
@@ -82,12 +115,25 @@ export const getAssignmentPriority = (
     else if (daysUntilDue === 0) score += 500_000;
     else score += 10_000 / (daysUntilDue + 1);
   }
+  if (paceStatus === "behind") score += 100_000;
+  const canDeprioritize =
+    !data.late_amendment &&
+    (daysUntilDue === null || daysUntilDue > 0);
+  if (progressMadeToday && onSchedule && canDeprioritize) score *= 0.08;
+  else if (streakStatus === "active" && onSchedule && canDeprioritize) {
+    score *= 0.35;
+  }
   if (completed) score = -1;
 
   let urgency: AssignmentPriority["urgency"] = "normal";
   if (completed) urgency = "complete";
   else if (data.late_amendment) urgency = "critical";
   else if (daysUntilDue !== null && daysUntilDue <= 0) urgency = "critical";
+  else if (progressMadeToday && onSchedule) urgency = "normal";
+  else if (streakStatus === "active" && onSchedule) urgency = "normal";
+  else if (paceStatus === "behind" && (daysUntilDue ?? 14) <= 1) {
+    urgency = "critical";
+  } else if (paceStatus === "behind") urgency = "high";
   else if (
     (daysUntilDue !== null && daysUntilDue <= 1) ||
     minutesPerAvailableDay >= 60
@@ -96,18 +142,6 @@ export const getAssignmentPriority = (
     (daysUntilDue !== null && daysUntilDue <= 3) ||
     minutesPerAvailableDay >= 30
   ) urgency = "high";
-
-  const lastProgressTime = data.last_progress_at
-    ? new Date(data.last_progress_at).getTime()
-    : Number.NaN;
-  const daysSinceProgress = Number.isNaN(lastProgressTime)
-    ? null
-    : Math.floor((today - startOfUTCDay(new Date(lastProgressTime))) / 86400000);
-  const streakStatus: AssignmentPriority["streakStatus"] = completedDays === 0
-    ? "not-started"
-    : daysSinceProgress !== null && daysSinceProgress > 1
-      ? "missed"
-      : "active";
 
   const baseDueLabel = daysUntilDue === null
     ? "No due date"
@@ -126,12 +160,17 @@ export const getAssignmentPriority = (
     classLabel: data.class_name || "Individual",
     color: getClassColor(data.class_id, data.class_name),
     completed,
+    completedDays,
+    completionPercent,
     daysUntilDue,
     dueLabel,
     minutesPerAvailableDay,
+    paceStatus,
+    progressMadeToday,
     remainingMinutes,
     score,
     streakStatus,
+    targetDays,
     urgency,
   };
 };
