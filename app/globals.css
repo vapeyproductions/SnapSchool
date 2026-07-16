@@ -157,6 +157,10 @@
   padding: .5rem;
 }
 
+.student-story-list .str-chat__channel-list__header {
+  display: none;
+}
+
 .social-workspace .str-chat__channel-list-item {
   margin-bottom: .45rem;
   border: 0;
@@ -209,6 +213,21 @@
 
 .assignment-story-card[data-urgency="critical"] {
   box-shadow: 3px 3px 0 #f24e2e;
+}
+
+.assignment-sidebar-card {
+  display: block;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+
+.assignment-sidebar-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 3px 3px 0 #171717;
+}
+
+.assignment-sidebar-card[data-active="true"] {
+  outline: 3px solid #171717;
+  outline-offset: 2px;
 }
 
 @media (max-width: 767px) {
