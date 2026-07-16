@@ -11,7 +11,9 @@ import {
   Inbox,
   Loader2,
   MessageCircleQuestion,
+  Pencil,
   School,
+  Trash2,
   UsersRound,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -19,14 +21,34 @@ import type { Channel as StreamChannel, ChannelFilters, ChannelSort } from "stre
 import { Channel, Chat, MessageComposer, MessageList, Window } from "stream-chat-react";
 
 import {
+  deletePublishedAssignment,
   getAdministratorClasses,
   type SchoolClassSummary,
+  updatePublishedAssignment,
 } from "@/actions/stream";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { getAssignmentPriority } from "@/lib/assignment-priority";
 
 import { useGetStreamClient } from "./useGetStreamClient";
 
 type DashboardTab = "messages" | "overview" | "progress";
+type AssignmentKind =
+  | "essay"
+  | "exam"
+  | "homework"
+  | "other"
+  | "project"
+  | "quiz"
+  | "reading"
+  | "test";
 
 type DailyTask = {
   estimatedMinutes?: number;
@@ -86,6 +108,160 @@ const isStudentMessage = (
       !message.text.startsWith("🤖 AI progress review:") &&
       !message.text.startsWith("Progress evidence"),
   );
+
+function AssignmentManagement({
+  assignment,
+  onDeleted,
+  onUpdated,
+  user,
+}: {
+  assignment: AssignmentGroup;
+  onDeleted: (channelCids: string[]) => void;
+  onUpdated: (
+    channelCids: string[],
+    update: {
+      assignmentKind: AssignmentKind;
+      assignmentSummary: string;
+      dueDate: string;
+      title: string;
+    },
+  ) => void;
+  user: User;
+}) {
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const channelCids = assignment.channels.map((channel) => channel.cid);
+  const assignmentSummary =
+    assignment.channels[0]?.data?.assignment_summary || "No summary provided.";
+
+  const saveAssignment = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setErrorMessage("");
+    setIsSaving(true);
+    const formData = new FormData(event.currentTarget);
+    const update = {
+      assignmentKind: String(formData.get("assignmentKind")) as AssignmentKind,
+      assignmentSummary: String(formData.get("assignmentSummary") ?? "").trim(),
+      dueDate: String(formData.get("dueDate") ?? ""),
+      title: String(formData.get("title") ?? "").trim(),
+    };
+
+    try {
+      const result = await updatePublishedAssignment({
+        ...update,
+        channelCids,
+        firebaseIdToken: await user.getIdToken(),
+      });
+      if (!result.success) {
+        setErrorMessage(result.error ?? "Unable to update the assignment");
+        return;
+      }
+      onUpdated(channelCids, update);
+      setEditOpen(false);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Unable to update the assignment");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const deleteAssignment = async () => {
+    setErrorMessage("");
+    setIsDeleting(true);
+    try {
+      const result = await deletePublishedAssignment({
+        channelCids,
+        firebaseIdToken: await user.getIdToken(),
+      });
+      if (!result.success) {
+        setErrorMessage(result.error ?? "Unable to delete the assignment");
+        return;
+      }
+      onDeleted(channelCids);
+      setDeleteOpen(false);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Unable to delete the assignment");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Dialog open={editOpen} onOpenChange={(open) => { setEditOpen(open); setErrorMessage(""); }}>
+        <DialogTrigger render={<Button className="rounded-full border-2 border-black bg-white px-3 font-black text-black hover:bg-zinc-100" />}>
+          <Pencil className="size-4" /> Edit
+        </DialogTrigger>
+        <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Edit shared assignment</DialogTitle>
+            <DialogDescription>
+              Changes apply to every assigned student. Individual progress and AI-recalibrated plans are preserved.
+            </DialogDescription>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={saveAssignment}>
+            <label className="block space-y-2 text-sm font-medium">
+              Assignment title
+              <input className="w-full rounded-xl border border-slate-300 px-3 py-2.5" defaultValue={assignment.title} maxLength={100} minLength={3} name="title" required />
+            </label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block space-y-2 text-sm font-medium">
+                Type
+                <select className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 capitalize" defaultValue={assignment.kind} name="assignmentKind" required>
+                  {(["homework", "reading", "essay", "project", "quiz", "test", "exam", "other"] as AssignmentKind[]).map((kind) => <option className="capitalize" key={kind} value={kind}>{kind}</option>)}
+                </select>
+              </label>
+              <label className="block space-y-2 text-sm font-medium">
+                Due date
+                <input className="w-full rounded-xl border border-slate-300 px-3 py-2.5" defaultValue={assignment.dueDate} name="dueDate" required type="date" />
+              </label>
+            </div>
+            <label className="block space-y-2 text-sm font-medium">
+              Shared assignment summary
+              <textarea className="min-h-32 w-full rounded-xl border border-slate-300 px-3 py-2.5" defaultValue={assignmentSummary} maxLength={1500} minLength={5} name="assignmentSummary" required />
+            </label>
+            <p className="rounded-xl bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+              Changing the due date does not erase completed streak steps. Each student&apos;s plan can recalibrate the next time they submit progress.
+            </p>
+            {errorMessage && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700" role="alert">{errorMessage}</p>}
+            <Button className="w-full rounded-xl bg-black py-3 font-black text-white" disabled={isSaving} type="submit">
+              {isSaving && <Loader2 className="size-4 animate-spin" />}
+              {isSaving ? "Updating assignment…" : `Update for ${assignment.channels.length} student${assignment.channels.length === 1 ? "" : "s"}`}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteOpen} onOpenChange={(open) => { setDeleteOpen(open); setErrorMessage(""); }}>
+        <DialogTrigger render={<Button className="rounded-full border-2 border-red-700 bg-white px-3 font-black text-red-700 hover:bg-red-50" />}>
+          <Trash2 className="size-4" /> Delete
+        </DialogTrigger>
+        <DialogContent className="rounded-2xl sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete {assignment.title}?</DialogTitle>
+            <DialogDescription>
+              This removes the shared assignment for all {assignment.channels.length} assigned student{assignment.channels.length === 1 ? "" : "s"}, including its conversations and submitted evidence.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800">
+            This action cannot be undone.
+          </div>
+          {errorMessage && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700" role="alert">{errorMessage}</p>}
+          <div className="grid grid-cols-2 gap-2">
+            <Button className="rounded-xl border-2 border-black bg-white text-black hover:bg-zinc-100" disabled={isDeleting} onClick={() => setDeleteOpen(false)} type="button">Cancel</Button>
+            <Button className="rounded-xl bg-red-700 font-black text-white hover:bg-red-800" disabled={isDeleting} onClick={() => void deleteAssignment()} type="button">
+              {isDeleting && <Loader2 className="size-4 animate-spin" />}
+              {isDeleting ? "Deleting…" : "Delete assignment"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
 
 function LoadingDashboard() {
   return (
@@ -392,9 +568,44 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
                       <span>{selectedAssignment.channels.length} students</span>
                     </p>
                   </div>
-                  <div className="rounded-2xl border-2 border-black bg-[#fffc00] px-4 py-2 text-center shadow-[3px_3px_0_#111]">
-                    <p className="text-xl font-black">{averageProgress}%</p>
-                    <p className="text-[10px] font-bold uppercase tracking-wider">Class average</p>
+                  <div className="flex flex-wrap items-center justify-end gap-3">
+                    <AssignmentManagement
+                      assignment={selectedAssignment}
+                      onDeleted={(channelCids) => {
+                        const deletedCids = new Set(channelCids);
+                        setChannels((current) => current.filter((channel) => !deletedCids.has(channel.cid)));
+                        setSelectedAssignmentKey("");
+                        setReplyChannelCid("");
+                        setTab("overview");
+                      }}
+                      onUpdated={(channelCids, update) => {
+                        const updatedCids = new Set(channelCids);
+                        setChannels((current) =>
+                          current.map((channel) => {
+                            if (!updatedCids.has(channel.cid)) return channel;
+                            channel.data = {
+                              ...channel.data,
+                              assignment_kind: update.assignmentKind,
+                              assignment_summary: update.assignmentSummary,
+                              assignment_title: update.title,
+                              due_date: update.dueDate,
+                              name: channel.data?.student_username
+                                ? `${update.title} · ${channel.data.student_username}`
+                                : update.title,
+                            };
+                            return channel;
+                          }),
+                        );
+                        setSelectedAssignmentKey(
+                          `${update.title}:${update.dueDate}:${update.assignmentKind}`,
+                        );
+                      }}
+                      user={user}
+                    />
+                    <div className="rounded-2xl border-2 border-black bg-[#fffc00] px-4 py-2 text-center shadow-[3px_3px_0_#111]">
+                      <p className="text-xl font-black">{averageProgress}%</p>
+                      <p className="text-[10px] font-bold uppercase tracking-wider">Class average</p>
+                    </div>
                   </div>
                 </div>
 

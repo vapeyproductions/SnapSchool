@@ -927,3 +927,147 @@ export const createAssignmentChannel = async (
     };
   }
 };
+
+const loadAuthorizedAssignmentChannels = async (
+  firebaseIdToken: string,
+  channelCids: string[],
+) => {
+  const administrator = await authenticateCaller(firebaseIdToken);
+  if (administrator.role !== "administrator") {
+    throw new Error("Only administrators can manage assignments");
+  }
+
+  const cids = [...new Set(channelCids)];
+  if (
+    cids.length === 0 ||
+    cids.length > 100 ||
+    cids.some((cid) => !/^(messaging|livestream):[a-zA-Z0-9_-]{1,100}$/.test(cid))
+  ) {
+    throw new Error("Select a valid shared assignment");
+  }
+
+  const channels = await Promise.all(
+    cids.map(async (cid) => {
+      const separator = cid.indexOf(":");
+      const type = cid.slice(0, separator);
+      const id = cid.slice(separator + 1);
+      const channel = serverClient.channel(type, id);
+      const response = await channel.query();
+      return { channel, data: response.channel };
+    }),
+  );
+  const first = channels[0].data;
+  const classId = first.class_id;
+
+  if (
+    channels.some(
+      ({ data }) =>
+        data.class_id !== classId ||
+        data.assignment_title !== first.assignment_title ||
+        data.due_date !== first.due_date ||
+        data.assignment_kind !== first.assignment_kind,
+    )
+  ) {
+    throw new Error("The selected channels do not belong to one assignment");
+  }
+
+  if (typeof classId === "string") {
+    const schoolClass = await getSchoolClass(firebaseIdToken, classId);
+    if (!schoolClass.administratorIds.includes(administrator.uid)) {
+      throw new Error("You do not have permission to manage this class assignment");
+    }
+  } else if (
+    channels.some(({ data }) => data.created_by_id !== administrator.uid)
+  ) {
+    throw new Error("You do not have permission to manage this assignment");
+  }
+
+  return channels;
+};
+
+const editableAssignmentKinds = [
+  "essay",
+  "exam",
+  "homework",
+  "other",
+  "project",
+  "quiz",
+  "reading",
+  "test",
+] as const;
+
+export const updatePublishedAssignment = async (data: {
+  assignmentKind: (typeof editableAssignmentKinds)[number];
+  assignmentSummary: string;
+  channelCids: string[];
+  dueDate: string;
+  firebaseIdToken: string;
+  title: string;
+}) => {
+  try {
+    const title = data.title.trim();
+    const assignmentSummary = data.assignmentSummary.trim();
+
+    if (title.length < 3 || title.length > 100) {
+      throw new Error("Assignment titles must be between 3 and 100 characters");
+    }
+    if (!isISODate(data.dueDate)) {
+      throw new Error("Choose a valid due date");
+    }
+    if (assignmentSummary.length < 5 || assignmentSummary.length > 1500) {
+      throw new Error("The assignment summary must be between 5 and 1,500 characters");
+    }
+    if (!editableAssignmentKinds.includes(data.assignmentKind)) {
+      throw new Error("Select a valid assignment type");
+    }
+
+    const channels = await loadAuthorizedAssignmentChannels(
+      data.firebaseIdToken,
+      data.channelCids,
+    );
+    await Promise.all(
+      channels.map(({ channel, data: channelData }) =>
+        channel.updatePartial({
+          set: {
+            assignment_kind: data.assignmentKind,
+            assignment_summary: assignmentSummary,
+            assignment_title: title,
+            due_date: data.dueDate,
+            name: channelData.student_username
+              ? `${title} · ${channelData.student_username}`
+              : title,
+          },
+        }),
+      ),
+    );
+
+    return { error: null, success: true, updatedCount: channels.length };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : "Unable to update the assignment",
+      success: false,
+      updatedCount: 0,
+    };
+  }
+};
+
+export const deletePublishedAssignment = async (data: {
+  channelCids: string[];
+  firebaseIdToken: string;
+}) => {
+  try {
+    const channels = await loadAuthorizedAssignmentChannels(
+      data.firebaseIdToken,
+      data.channelCids,
+    );
+    await Promise.all(channels.map(({ channel }) => channel.delete()));
+
+    return { deletedCount: channels.length, error: null, success: true };
+  } catch (error) {
+    return {
+      deletedCount: 0,
+      error: error instanceof Error ? error.message : "Unable to delete the assignment",
+      success: false,
+    };
+  }
+};
