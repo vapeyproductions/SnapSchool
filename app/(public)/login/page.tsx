@@ -7,11 +7,8 @@ import { useEffect, useState } from "react";
 import { cacheAccountRole } from "@/lib/auth-role-cache";
 import { loginUser } from "@/lib/server";
 
-type LoginMode = "student" | "administrator" | "parent";
-
 export default function LoginPage() {
   const [buttonClicked, setButtonClicked] = useState(false);
-  const [mode, setMode] = useState<LoginMode>("student");
   const [errorMessage, setErrorMessage] = useState("");
   const router = useRouter();
 
@@ -65,51 +62,11 @@ export default function LoginPage() {
         </p>
       </div>
 
-      <div
-        className="mb-6 grid grid-cols-3 rounded-full border-2 border-black bg-[#f4f0e8] p-1"
-        aria-label="Account type"
-      >
-        <button
-          type="button"
-          aria-pressed={mode === "student"}
-          onClick={() => setMode("student")}
-          className={`rounded-full px-3 py-2 text-sm font-bold transition-colors ${
-            mode === "student"
-              ? "bg-black text-white"
-              : "text-zinc-600 hover:text-zinc-950"
-          }`}
-        >
-          Student
-        </button>
-        <button
-          type="button"
-          aria-pressed={mode === "administrator"}
-          onClick={() => setMode("administrator")}
-          className={`rounded-full px-3 py-2 text-sm font-bold transition-colors ${
-            mode === "administrator"
-              ? "bg-black text-white"
-              : "text-zinc-600 hover:text-zinc-950"
-          }`}
-        >
-          Administrator
-        </button>
-        <button
-          type="button"
-          aria-pressed={mode === "parent"}
-          onClick={() => setMode("parent")}
-          className={`rounded-full px-3 py-2 text-sm font-bold transition-colors ${
-            mode === "parent"
-              ? "bg-black text-white"
-              : "text-zinc-600 hover:text-zinc-950"
-          }`}
-        >
-          Parent
-        </button>
-      </div>
+      <p className="mb-6 rounded-2xl border-2 border-black bg-[#f4f0e8] px-4 py-3 text-sm font-semibold text-zinc-700">
+        Sign in once—SnapSchool will automatically open your student, administrator, or parent dashboard.
+      </p>
 
       <form className="space-y-5" onSubmit={handleSubmit}>
-        <input type="hidden" name="role" value={mode} />
-
         <div className="space-y-2">
           <label className="block text-sm font-medium" htmlFor="email">
             Email address
@@ -145,7 +102,7 @@ export default function LoginPage() {
         >
           {buttonClicked
             ? "Signing in..."
-            : `Sign in as ${mode}`}
+            : "Sign in"}
         </button>
 
         {errorMessage && (

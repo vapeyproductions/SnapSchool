@@ -72,7 +72,12 @@ export function AuthProvider({
           return;
         }
 
-        let profile = await getDoc(doc(db, "profiles", currentUser.uid));
+        let profile;
+        try {
+          profile = await getDoc(doc(db, "profiles", currentUser.uid));
+        } catch {
+          profile = await getDoc(doc(db, "users", currentUser.displayName));
+        }
         if (!profile.exists()) {
           profile = await getDoc(doc(db, "users", currentUser.displayName));
         }

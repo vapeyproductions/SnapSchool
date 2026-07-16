@@ -149,7 +149,7 @@ export default function StreakPage({
 }: StreakPageProps) {
   const { role, user, loading } = useContext(AuthContext);
 
-  if (loading || !user) return <LoadingStreaks />;
+  if (loading || !user || !role) return <LoadingStreaks />;
 
   if (role === "administrator") {
     return <AdministratorClassDashboard user={user} />;

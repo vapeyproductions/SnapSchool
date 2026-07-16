@@ -124,16 +124,11 @@ export const loginUser = async (form: FormData) => {
     .trim()
     .toLowerCase();
   const password = String(form.get("password") ?? "");
-  const selectedRole = form.get("role");
   let authenticatedThisAttempt = false;
 
   try {
     if (!email || !password) {
       throw new Error("Email and password are required");
-    }
-
-    if (selectedRole !== "student" && selectedRole !== "administrator" && selectedRole !== "parent") {
-      throw new Error("Select a valid account type");
     }
 
     const { user } = await signInWithEmailAndPassword(auth, email, password);
@@ -149,14 +144,33 @@ export const loginUser = async (form: FormData) => {
       };
     }
 
+    let profile;
+    try {
+      profile = await getDoc(doc(db, "profiles", user.uid));
+    } catch {
+      // Existing Firebase projects may not have deployed the UID-profile
+      // rules yet, so retain the username-keyed profile as a safe fallback.
+      profile = await getDoc(doc(db, "users", user.displayName));
+    }
+    if (!profile.exists()) {
+      profile = await getDoc(doc(db, "users", user.displayName));
+    }
+    const storedRole = profile.data()?.role;
+    if (storedRole !== "student" && storedRole !== "administrator" && storedRole !== "parent") {
+      await signOut(auth);
+      return {
+        code: "auth/profile-missing" as const,
+        status: 403,
+        user: null,
+        message: "This account does not have a valid SnapSchool role",
+      };
+    }
+
     return {
       code: "auth/success" as const,
       status: 200,
       user,
-      // AuthContext immediately renders with this provisional role and then
-      // replaces it with the Firestore role in the background. Privileged
-      // server actions always perform their own role verification.
-      role: selectedRole as AccountRole,
+      role: storedRole as AccountRole,
       message: "Logged in successfully! 🎉",
     };
   } catch (error: unknown) {
