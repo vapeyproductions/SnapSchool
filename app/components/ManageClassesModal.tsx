@@ -172,11 +172,28 @@ export default function ManageClassesModal() {
           )
           .sort((a, b) => a.name.localeCompare(b.name)),
       );
+      const syncMessage =
+        "syncedAssignmentCount" in result && result.syncedAssignmentCount > 0
+          ? `${result.syncedAssignmentCount} missing assignment channel${result.syncedAssignmentCount === 1 ? " was" : "s were"} added for newly enrolled students.`
+          : "";
       setSuccessMessage(
-        result.warning ?? `${classRecord.name} was updated successfully.`,
+        [
+          `${classRecord.name} was updated successfully.`,
+          syncMessage,
+          result.warning,
+        ]
+          .filter(Boolean)
+          .join(" "),
       );
       window.dispatchEvent(
-        new CustomEvent("snapschool:class-updated", { detail: classRecord }),
+        new CustomEvent("snapschool:class-updated", {
+          detail: {
+            ...classRecord,
+            assignmentsChanged:
+              "syncedAssignmentCount" in result &&
+              result.syncedAssignmentCount > 0,
+          },
+        }),
       );
       cancelEditing();
     } catch (error) {
@@ -335,8 +352,10 @@ export default function ManageClassesModal() {
                         value={editingRoster}
                       />
                       <p className="text-xs leading-5 text-slate-500">
-                        Add or remove comma-separated student usernames. Changes
-                        apply to future assignments and do not alter existing ones.
+                        Add or remove comma-separated student usernames. Newly
+                        added students receive the class&apos;s existing individual
+                        assignments with fresh progress; removing a student does
+                        not delete their historical work.
                       </p>
                     </div>
                     <div className="flex justify-end gap-2">

@@ -480,8 +480,12 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
   const [, refresh] = useState(0);
 
   useEffect(() => {
-    const handleClassUpdated = (event: Event) => {
-      const classRecord = (event as CustomEvent<SchoolClassSummary>).detail;
+    const handleClassUpdated = async (event: Event) => {
+      const classRecord = (
+        event as CustomEvent<
+          SchoolClassSummary & { assignmentsChanged?: boolean }
+        >
+      ).detail;
       if (!classRecord?.id) return;
 
       setClasses((current) =>
@@ -498,12 +502,33 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
           return channel;
         }),
       );
+
+      if (classRecord.assignmentsChanged && client) {
+        try {
+          const individualChannels = await client.queryChannels(
+            {
+              members: { $in: [user.uid] },
+              type: "messaging",
+            } as ChannelFilters,
+            { last_message_at: -1 },
+            { message_limit: 30, state: true, watch: true },
+          );
+          setChannels((current) => [
+            ...individualChannels,
+            ...current.filter((channel) => channel.type !== "messaging"),
+          ]);
+        } catch {
+          setErrorMessage(
+            "The roster was updated, but refresh the page to see the new student assignment records.",
+          );
+        }
+      }
     };
 
     window.addEventListener("snapschool:class-updated", handleClassUpdated);
     return () =>
       window.removeEventListener("snapschool:class-updated", handleClassUpdated);
-  }, []);
+  }, [client, user.uid]);
 
   useEffect(() => {
     if (!client) return;

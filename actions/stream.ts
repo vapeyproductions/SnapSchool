@@ -744,31 +744,151 @@ export const updateSchoolClass = async (data: {
     if (!response.ok) throw new Error("Unable to update the class");
 
     let warning: string | null = null;
-    if (name !== schoolClass.name) {
-      try {
-        const pageSize = 30;
-        let offset = 0;
+    let syncedAssignmentCount = 0;
+    try {
+      const pageSize = 30;
+      let offset = 0;
+      const classChannels: Awaited<
+        ReturnType<typeof serverClient.queryChannels>
+      > = [];
 
-        while (true) {
-          const channels = await serverClient.queryChannels(
-            { class_id: schoolClass.id },
-            {},
-            { limit: pageSize, offset, state: false, watch: false },
-          );
+      while (true) {
+        const channels = await serverClient.queryChannels(
+          { class_id: schoolClass.id },
+          {},
+          { limit: pageSize, offset, state: true, watch: false },
+        );
+        classChannels.push(...channels);
 
-          await Promise.all(
-            channels.map((channel) =>
-              channel.updatePartial({ set: { class_name: name } }),
-            ),
-          );
-
-          if (channels.length < pageSize) break;
-          offset += pageSize;
-        }
-      } catch {
-        warning =
-          "The class was renamed, but some existing assignment labels may refresh after their next update.";
+        if (channels.length < pageSize) break;
+        offset += pageSize;
       }
+
+      if (name !== schoolClass.name) {
+        await Promise.all(
+          classChannels.map((channel) =>
+            channel.updatePartial({ set: { class_name: name } }),
+          ),
+        );
+      }
+
+      const individualAssignments = new Map<
+        string,
+        (typeof classChannels)[number][]
+      >();
+
+      classChannels
+        .filter((channel) => channel.data?.assignment_type === "individual")
+        .forEach((channel) => {
+          const channelData = channel.data;
+          const assignmentKey = [
+            channelData?.assignment_title ?? channelData?.name ?? "Assignment",
+            channelData?.original_due_date ?? channelData?.due_date ?? "none",
+            channelData?.assignment_kind ?? "assignment",
+          ].join(":");
+          const existing = individualAssignments.get(assignmentKey) ?? [];
+          existing.push(channel);
+          individualAssignments.set(assignmentKey, existing);
+        });
+
+      const createResults = await Promise.allSettled(
+        [...individualAssignments.entries()].flatMap(
+          ([assignmentKey, assignmentChannels]) => {
+            const template = assignmentChannels[0];
+            const templateData = template.data;
+            const assignedStudentIds = new Set(
+              assignmentChannels.flatMap((channel) =>
+                Object.keys(channel.state.members),
+              ),
+            );
+
+            return students
+              .filter((student) => !assignedStudentIds.has(student.uid))
+              .map(async (student) => {
+                const digest = await crypto.subtle.digest(
+                  "SHA-256",
+                  new TextEncoder().encode(
+                    `${schoolClass.id}:${assignmentKey}`,
+                  ),
+                );
+                const fingerprint = Array.from(new Uint8Array(digest))
+                  .slice(0, 6)
+                  .map((value) => value.toString(16).padStart(2, "0"))
+                  .join("");
+                const studentSuffix = student.uid
+                  .replace(/[^a-zA-Z0-9_-]/g, "")
+                  .slice(0, 16);
+                const creatorId =
+                  typeof templateData?.created_by_id === "string"
+                    ? templateData.created_by_id
+                    : administrator.uid;
+                const title =
+                  templateData?.assignment_title ??
+                  templateData?.name ??
+                  "Assignment";
+                const dueDate =
+                  templateData?.original_due_date ?? templateData?.due_date;
+                const channel = serverClient.channel(
+                  "messaging",
+                  `individual-added-${fingerprint}-${studentSuffix}`,
+                  {
+                    assignment_kind: templateData?.assignment_kind,
+                    assignment_source: "school",
+                    assignment_summary: templateData?.assignment_summary,
+                    assignment_title: title,
+                    assignment_type: "individual",
+                    class_id: schoolClass.id,
+                    class_name: name,
+                    created_by_id: creatorId,
+                    daily_plan: templateData?.daily_plan,
+                    due_date: dueDate,
+                    estimated_total_minutes:
+                      templateData?.estimated_total_minutes,
+                    members: [creatorId, student.uid],
+                    name: `${title} · ${student.username}`,
+                    recommended_work_days:
+                      templateData?.recommended_work_days,
+                    student_username: student.username,
+                  },
+                );
+
+                await channel.create();
+              });
+          },
+        ),
+      );
+      syncedAssignmentCount = createResults.filter(
+        (result) => result.status === "fulfilled",
+      ).length;
+      const failedCount = createResults.length - syncedAssignmentCount;
+      const groupAssignments = new Map<string, Set<string>>();
+      classChannels
+        .filter((channel) => channel.data?.assignment_type === "group")
+        .forEach((channel) => {
+          const assignmentKey =
+            channel.data?.group_assignment_batch_id ?? channel.cid;
+          const memberIds =
+            groupAssignments.get(assignmentKey) ?? new Set<string>();
+          Object.keys(channel.state.members).forEach((memberId) =>
+            memberIds.add(memberId),
+          );
+          groupAssignments.set(assignmentKey, memberIds);
+        });
+      const groupPlacementNeeded = [...groupAssignments.values()].some(
+        (memberIds) => students.some((student) => !memberIds.has(student.uid)),
+      );
+      const notices = [
+        failedCount > 0
+          ? `${failedCount} existing assignment${failedCount === 1 ? "" : "s"} could not be added automatically.`
+          : null,
+        groupPlacementNeeded
+          ? "Existing group projects still require the teacher to place new students into a group."
+          : null,
+      ].filter((notice): notice is string => Boolean(notice));
+      warning = notices.length > 0 ? notices.join(" ") : null;
+    } catch {
+      warning =
+        "The class was updated, but existing assignment synchronization could not be verified. Save the class again to retry.";
     }
 
     return {
@@ -780,6 +900,7 @@ export const updateSchoolClass = async (data: {
       } satisfies SchoolClassSummary,
       error: null,
       success: true,
+      syncedAssignmentCount,
       warning,
     };
   } catch (error) {
