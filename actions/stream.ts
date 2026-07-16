@@ -607,9 +607,10 @@ export const createSchoolClass = async (data: {
   }
 };
 
-export const updateSchoolClassRoster = async (data: {
+export const updateSchoolClass = async (data: {
   classId: string;
   firebaseIdToken: string;
+  name: string;
   studentUsernames: string[];
 }) => {
   try {
@@ -618,8 +619,9 @@ export const updateSchoolClassRoster = async (data: {
     if (administrator.role !== "administrator") {
       return {
         classRecord: null,
-        error: "Only administrators can edit class rosters",
+        error: "Only administrators can edit classes",
         success: false,
+        warning: null,
       };
     }
 
@@ -633,9 +635,11 @@ export const updateSchoolClassRoster = async (data: {
         classRecord: null,
         error: "You do not have permission to edit this class",
         success: false,
+        warning: null,
       };
     }
 
+    const name = data.name.trim();
     const usernames = [...new Set(
       data.studentUsernames
         .map((username) => username.trim().toLowerCase())
@@ -647,6 +651,16 @@ export const updateSchoolClassRoster = async (data: {
         classRecord: null,
         error: "A class must contain at least one student",
         success: false,
+        warning: null,
+      };
+    }
+
+    if (name.length < 2 || name.length > 80) {
+      return {
+        classRecord: null,
+        error: "Class names must be between 2 and 80 characters",
+        success: false,
+        warning: null,
       };
     }
 
@@ -655,6 +669,7 @@ export const updateSchoolClassRoster = async (data: {
         classRecord: null,
         error: "A class can contain up to 100 students",
         success: false,
+        warning: null,
       };
     }
 
@@ -663,6 +678,7 @@ export const updateSchoolClassRoster = async (data: {
         classRecord: null,
         error: "Do not add your own administrator username to the roster",
         success: false,
+        warning: null,
       };
     }
 
@@ -676,6 +692,7 @@ export const updateSchoolClassRoster = async (data: {
         classRecord: null,
         error: `The account "${nonStudent.username}" is not a student`,
         success: false,
+        warning: null,
       };
     }
     const independentStudent = students.find(
@@ -686,6 +703,7 @@ export const updateSchoolClassRoster = async (data: {
         classRecord: null,
         error: `The independent account "${independentStudent.username}" cannot be added to a school class`,
         success: false,
+        warning: null,
       };
     }
 
@@ -694,6 +712,7 @@ export const updateSchoolClassRoster = async (data: {
       `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}` +
         `/databases/(default)/documents/classes/${schoolClass.id}`,
     );
+    updateUrl.searchParams.append("updateMask.fieldPaths", "name");
     updateUrl.searchParams.append("updateMask.fieldPaths", "studentIds");
     updateUrl.searchParams.append("updateMask.fieldPaths", "studentUsernames");
     const response = await fetch(updateUrl, {
@@ -705,6 +724,7 @@ export const updateSchoolClassRoster = async (data: {
       },
       body: JSON.stringify({
         fields: {
+          name: { stringValue: name },
           studentIds: {
             arrayValue: {
               values: students.map((student) => ({ stringValue: student.uid })),
@@ -721,24 +741,54 @@ export const updateSchoolClassRoster = async (data: {
       } satisfies FirestoreDocument),
     });
 
-    if (!response.ok) throw new Error("Unable to update the class roster");
+    if (!response.ok) throw new Error("Unable to update the class");
+
+    let warning: string | null = null;
+    if (name !== schoolClass.name) {
+      try {
+        const pageSize = 30;
+        let offset = 0;
+
+        while (true) {
+          const channels = await serverClient.queryChannels(
+            { class_id: schoolClass.id },
+            {},
+            { limit: pageSize, offset, state: false, watch: false },
+          );
+
+          await Promise.all(
+            channels.map((channel) =>
+              channel.updatePartial({ set: { class_name: name } }),
+            ),
+          );
+
+          if (channels.length < pageSize) break;
+          offset += pageSize;
+        }
+      } catch {
+        warning =
+          "The class was renamed, but some existing assignment labels may refresh after their next update.";
+      }
+    }
 
     return {
       classRecord: {
         id: schoolClass.id,
-        name: schoolClass.name,
+        name,
         studentCount: students.length,
         studentUsernames: students.map((student) => student.username),
       } satisfies SchoolClassSummary,
       error: null,
       success: true,
+      warning,
     };
   } catch (error) {
     return {
       classRecord: null,
       error:
-        error instanceof Error ? error.message : "Unable to update roster",
+        error instanceof Error ? error.message : "Unable to update the class",
       success: false,
+      warning: null,
     };
   }
 };

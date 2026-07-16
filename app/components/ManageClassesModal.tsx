@@ -21,7 +21,7 @@ import {
   createSchoolClass,
   getAdministratorClasses,
   type SchoolClassSummary,
-  updateSchoolClassRoster,
+  updateSchoolClass,
 } from "@/actions/stream";
 import AuthContext from "@/app/components/AuthContext";
 import {
@@ -38,6 +38,7 @@ export default function ManageClassesModal() {
   const [successMessage, setSuccessMessage] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
+  const [editingClassName, setEditingClassName] = useState("");
   const [editingRoster, setEditingRoster] = useState("");
   const [isSavingRoster, setIsSavingRoster] = useState(false);
   const [isLoading, startLoadingTransition] = useTransition();
@@ -119,6 +120,7 @@ export default function ManageClassesModal() {
 
   const beginEditing = (schoolClass: SchoolClassSummary) => {
     setEditingClassId(schoolClass.id);
+    setEditingClassName(schoolClass.name);
     setEditingRoster(schoolClass.studentUsernames.join(", "));
     setErrorMessage("");
     setSuccessMessage("");
@@ -126,15 +128,16 @@ export default function ManageClassesModal() {
 
   const cancelEditing = () => {
     setEditingClassId(null);
+    setEditingClassName("");
     setEditingRoster("");
   };
 
-  const handleUpdateRoster = async (classId: string) => {
+  const handleUpdateClass = async (classId: string) => {
     setErrorMessage("");
     setSuccessMessage("");
 
     if (!user || role !== "administrator") {
-      setErrorMessage("Only administrators can edit class rosters");
+      setErrorMessage("Only administrators can edit classes");
       return;
     }
 
@@ -149,28 +152,36 @@ export default function ManageClassesModal() {
     setIsSavingRoster(true);
 
     try {
-      const result = await updateSchoolClassRoster({
+      const result = await updateSchoolClass({
         classId,
         firebaseIdToken: await user.getIdToken(),
+        name: editingClassName,
         studentUsernames,
       });
 
       if (!result.success || !result.classRecord) {
-        setErrorMessage(result.error ?? "Unable to update roster");
+        setErrorMessage(result.error ?? "Unable to update the class");
         return;
       }
 
       const classRecord = result.classRecord;
       setClasses((current) =>
-        current.map((item) =>
-          item.id === classRecord.id ? classRecord : item,
-        ),
+        current
+          .map((item) =>
+            item.id === classRecord.id ? classRecord : item,
+          )
+          .sort((a, b) => a.name.localeCompare(b.name)),
       );
-      setSuccessMessage(`${classRecord.name}'s roster was updated.`);
+      setSuccessMessage(
+        result.warning ?? `${classRecord.name} was updated successfully.`,
+      );
+      window.dispatchEvent(
+        new CustomEvent("snapschool:class-updated", { detail: classRecord }),
+      );
       cancelEditing();
     } catch (error) {
       setErrorMessage(
-        error instanceof Error ? error.message : "Unable to update roster",
+        error instanceof Error ? error.message : "Unable to update the class",
       );
     } finally {
       setIsSavingRoster(false);
@@ -282,13 +293,34 @@ export default function ManageClassesModal() {
                       onClick={() => beginEditing(schoolClass)}
                       type="button"
                     >
-                      <Pencil className="size-3.5" /> Edit roster
+                      <Pencil className="size-3.5" /> Edit class
                     </button>
                   )}
                 </div>
 
                 {editingClassId === schoolClass.id ? (
                   <div className="mt-4 space-y-3">
+                    <div className="space-y-2">
+                      <label
+                        className="block text-sm font-medium"
+                        htmlFor={`class-name-${schoolClass.id}`}
+                      >
+                        Class name
+                      </label>
+                      <input
+                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:ring-3 focus:ring-indigo-100"
+                        id={`class-name-${schoolClass.id}`}
+                        maxLength={80}
+                        minLength={2}
+                        onChange={(event) => setEditingClassName(event.target.value)}
+                        required
+                        type="text"
+                        value={editingClassName}
+                      />
+                      <p className="text-xs leading-5 text-slate-500">
+                        Renaming a class keeps its roster, assignments, and progress intact.
+                      </p>
+                    </div>
                     <div className="space-y-2">
                       <label
                         className="block text-sm font-medium"
@@ -318,8 +350,12 @@ export default function ManageClassesModal() {
                       </button>
                       <button
                         className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
-                        disabled={isSavingRoster}
-                        onClick={() => void handleUpdateRoster(schoolClass.id)}
+                        disabled={
+                          isSavingRoster ||
+                          editingClassName.trim().length < 2 ||
+                          editingRoster.trim().length === 0
+                        }
+                        onClick={() => void handleUpdateClass(schoolClass.id)}
                         type="button"
                       >
                         {isSavingRoster ? (
@@ -327,7 +363,7 @@ export default function ManageClassesModal() {
                         ) : (
                           <Save className="size-4" />
                         )}
-                        {isSavingRoster ? "Saving..." : "Save roster"}
+                        {isSavingRoster ? "Saving..." : "Save class changes"}
                       </button>
                     </div>
                   </div>

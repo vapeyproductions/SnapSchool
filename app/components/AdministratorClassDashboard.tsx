@@ -480,6 +480,32 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
   const [, refresh] = useState(0);
 
   useEffect(() => {
+    const handleClassUpdated = (event: Event) => {
+      const classRecord = (event as CustomEvent<SchoolClassSummary>).detail;
+      if (!classRecord?.id) return;
+
+      setClasses((current) =>
+        current
+          .map((schoolClass) =>
+            schoolClass.id === classRecord.id ? classRecord : schoolClass,
+          )
+          .sort((first, second) => first.name.localeCompare(second.name)),
+      );
+      setChannels((current) =>
+        current.map((channel) => {
+          if (channel.data?.class_id !== classRecord.id) return channel;
+          channel.data = { ...channel.data, class_name: classRecord.name };
+          return channel;
+        }),
+      );
+    };
+
+    window.addEventListener("snapschool:class-updated", handleClassUpdated);
+    return () =>
+      window.removeEventListener("snapschool:class-updated", handleClassUpdated);
+  }, []);
+
+  useEffect(() => {
     if (!client) return;
     let cancelled = false;
 
