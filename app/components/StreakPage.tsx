@@ -21,6 +21,7 @@ import {
 import { useGetStreamClient } from "./useGetStreamClient";
 
 type StreakPageProps = {
+  onDailyMinutesChange?: (minutes: number) => void;
   setReminderMessage: Dispatch<SetStateAction<string>>;
   setStreakReminder: Dispatch<SetStateAction<boolean>>;
 };
@@ -38,6 +39,7 @@ function LoadingStreaks() {
 
 function AuthenticatedStreakPage({
   user,
+  onDailyMinutesChange,
   setReminderMessage,
   setStreakReminder,
 }: StreakPageProps & { user: User }) {
@@ -112,6 +114,7 @@ function AuthenticatedStreakPage({
             <PriorityAssignmentList
               enabled
               filters={filters}
+              onDailyMinutesChange={onDailyMinutesChange}
               options={options}
               sort={sort}
             />
@@ -133,6 +136,7 @@ function AuthenticatedStreakPage({
 }
 
 export default function StreakPage({
+  onDailyMinutesChange,
   setReminderMessage,
   setStreakReminder,
 }: StreakPageProps) {
@@ -143,6 +147,7 @@ export default function StreakPage({
   return (
     <AuthenticatedStreakPage
       user={user}
+      onDailyMinutesChange={onDailyMinutesChange}
       setReminderMessage={setReminderMessage}
       setStreakReminder={setStreakReminder}
     />

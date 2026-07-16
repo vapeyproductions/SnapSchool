@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarDays, Clock3, Flame } from "lucide-react";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import type {
   Channel,
   ChannelFilters,
@@ -15,6 +15,7 @@ import { getAssignmentPriority } from "@/lib/assignment-priority";
 type PriorityAssignmentListProps = {
   enabled: boolean;
   filters: ChannelFilters;
+  onDailyMinutesChange?: (minutes: number) => void;
   options: ChannelOptions;
   sort: ChannelSort;
 };
@@ -49,9 +50,33 @@ const getCurrentDailyMission = (channel: Channel): DailyMission | null => {
   }
 };
 
+function DailyMinutesReporter({
+  channels,
+  onDailyMinutesChange,
+}: {
+  channels: Channel[];
+  onDailyMinutesChange?: (minutes: number) => void;
+}) {
+  const totalMinutes = channels.reduce((total, channel) => {
+    const priority = getAssignmentPriority(channel.data ?? {});
+    if (priority.completed) return total;
+
+    const estimatedMinutes = getCurrentDailyMission(channel)?.estimatedMinutes;
+    return total +
+      (typeof estimatedMinutes === "number" ? estimatedMinutes : 0);
+  }, 0);
+
+  useEffect(() => {
+    onDailyMinutesChange?.(totalMinutes);
+  }, [onDailyMinutesChange, totalMinutes]);
+
+  return null;
+}
+
 export function PriorityAssignmentList({
   enabled,
   filters,
+  onDailyMinutesChange,
   options,
   sort,
 }: PriorityAssignmentListProps) {
@@ -80,8 +105,13 @@ export function PriorityAssignmentList({
   );
 
   const renderChannels = useCallback(
-    (channels: Channel[]) =>
-      channels.map((channel) => {
+    (channels: Channel[]) => (
+      <>
+        <DailyMinutesReporter
+          channels={channels}
+          onDailyMinutesChange={onDailyMinutesChange}
+        />
+        {channels.map((channel) => {
         const priority = getAssignmentPriority(channel.data ?? {});
         const currentMission = getCurrentDailyMission(channel);
         const unreadCount = channel.countUnread();
@@ -171,9 +201,11 @@ export function PriorityAssignmentList({
               )}
             </span>
           </button>
-        );
-      }),
-    [activeChannel?.cid, enabled, setActiveChannel],
+          );
+        })}
+      </>
+    ),
+    [activeChannel?.cid, enabled, onDailyMinutesChange, setActiveChannel],
   );
 
   return (

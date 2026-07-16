@@ -36,6 +36,7 @@ export default function ChatPage() {
   const [openClassesModal, setOpenClassesModal] = useState(false);
   const [streakReminder, setStreakReminder] = useState(false);
   const [reminderMessage, setReminderMessage] = useState("");
+  const [dailyEstimatedMinutes, setDailyEstimatedMinutes] = useState(0);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
 
@@ -155,8 +156,16 @@ export default function ChatPage() {
               <Flame className="size-7 fill-current" />
             </div>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.15em]">Daily mission</p>
-              <p className="text-sm font-extrabold">Show what you worked on</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.15em]">
+                {isAdministrator
+                  ? "Daily mission"
+                  : `Est. ${dailyEstimatedMinutes} minutes`}
+              </p>
+              <p className="text-sm font-extrabold">
+                {isAdministrator
+                  ? "Show what your students worked on"
+                  : "Recommended work across today's assignments"}
+              </p>
             </div>
           </div>
         </section>
@@ -208,7 +217,11 @@ export default function ChatPage() {
             {view === "groups" ? (
               <GroupChatPage />
             ) : (
-              <StreakPage setReminderMessage={setReminderMessage} setStreakReminder={setStreakReminder} />
+              <StreakPage
+                onDailyMinutesChange={setDailyEstimatedMinutes}
+                setReminderMessage={setReminderMessage}
+                setStreakReminder={setStreakReminder}
+              />
             )}
           </div>
         </section>
