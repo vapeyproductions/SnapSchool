@@ -61,11 +61,19 @@ service cloud.firestore {
         && resource.data.uid == request.auth.uid
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.role == resource.data.role
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['username', 'photoURL', 'updatedAt', 'studentMode'])
         && (
-          request.resource.data.studentMode == resource.data.studentMode
+          (resource.data.role != 'student'
+            && !request.resource.data.diff(resource.data).affectedKeys()
+              .hasAny(['studentMode']))
           || (resource.data.role == 'student'
-            && !('studentMode' in resource.data)
-            && request.resource.data.studentMode == 'school')
+            && (
+              (('studentMode' in resource.data)
+                && request.resource.data.studentMode == resource.data.studentMode)
+              || (!('studentMode' in resource.data)
+                && request.resource.data.studentMode == 'school')
+            ))
         );
       allow delete: if false;
     }

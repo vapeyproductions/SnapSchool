@@ -200,46 +200,89 @@ export const loginUser = async (form: FormData) => {
 
 export const changeUsername = async (newUsernameValue: string) => {
   const user = auth.currentUser;
-  const currentUsername = user?.displayName?.trim().toLowerCase();
   const newUsername = newUsernameValue.trim().toLowerCase();
 
   try {
-    if (!user || !currentUsername) throw new Error("You must be signed in");
+    if (!user) throw new Error("You must be signed in");
     if (!/^[a-z0-9_.-]{3,30}$/.test(newUsername)) {
       throw new Error("Username must be 3-30 characters and use only letters, numbers, dots, underscores, or hyphens");
     }
+
+    const profileRef = doc(db, "profiles", user.uid);
+    const stableProfile = await getDoc(profileRef);
+    const stableProfileData = stableProfile.data();
+    const storedUsername =
+      stableProfile.exists() &&
+      stableProfileData?.uid === user.uid &&
+      typeof stableProfileData.username === "string"
+        ? stableProfileData.username.trim().toLowerCase()
+        : "";
+    const authUsername = user.displayName?.trim().toLowerCase() ?? "";
+    const currentUsername = storedUsername || authUsername;
+
+    if (!currentUsername) throw new Error("Your existing profile could not be verified");
+
+    const imageBaseUrl = process.env.NEXT_PUBLIC_IMAGE_URL;
+    if (!imageBaseUrl) throw new Error("User image configuration is missing");
+    const photoURL = `${imageBaseUrl}${encodeURIComponent(newUsername)}`;
+    const previousPhotoURL =
+      typeof stableProfileData?.photoURL === "string"
+        ? stableProfileData.photoURL
+        : user.photoURL;
+
     if (newUsername === currentUsername) {
+      if (authUsername !== currentUsername || user.photoURL !== photoURL) {
+        await updateProfile(user, { displayName: currentUsername, photoURL });
+      }
       return { success: true, message: "Your username is already up to date" };
     }
 
     const currentRef = doc(db, "users", currentUsername);
     const nextRef = doc(db, "users", newUsername);
-    const profileRef = doc(db, "profiles", user.uid);
-    const imageBaseUrl = process.env.NEXT_PUBLIC_IMAGE_URL;
-    if (!imageBaseUrl) throw new Error("User image configuration is missing");
-    const photoURL = `${imageBaseUrl}${encodeURIComponent(newUsername)}`;
-    const previousPhotoURL = user.photoURL;
 
     await updateProfile(user, { displayName: newUsername, photoURL });
     try {
       await runTransaction(db, async (transaction) => {
-        const [currentProfile, nextProfile] = await Promise.all([
+        const [currentProfile, nextProfile, currentStableProfile] = await Promise.all([
           transaction.get(currentRef),
           transaction.get(nextRef),
+          transaction.get(profileRef),
         ]);
-        if (!currentProfile.exists() || currentProfile.data().uid !== user.uid) {
+
+        const transactionUsername = currentStableProfile
+          .data()
+          ?.username?.trim()
+          .toLowerCase();
+        if (
+          currentStableProfile.exists() &&
+          transactionUsername &&
+          transactionUsername !== currentUsername
+        ) {
+          throw new Error("Your profile changed while saving. Please try again");
+        }
+
+        const currentProfileData = currentProfile.exists()
+          ? currentProfile.data()
+          : null;
+        const nextProfileData = nextProfile.exists() ? nextProfile.data() : null;
+        if (currentProfileData?.uid !== user.uid && nextProfileData?.uid !== user.uid) {
           throw new Error("Your existing profile could not be verified");
         }
-        if (nextProfile.exists()) throw new Error("That username is already taken");
+        if (nextProfile.exists() && nextProfileData?.uid !== user.uid) {
+          throw new Error("That username is already taken");
+        }
+
+        const sourceProfile = currentProfileData ?? nextProfileData;
+        if (!sourceProfile) throw new Error("Your existing profile could not be verified");
 
         const updatedProfile = {
-          ...currentProfile.data(),
+          ...sourceProfile,
           username: newUsername,
           photoURL,
-          ...(currentProfile.data().role === "student"
+          ...(sourceProfile.role === "student"
             ? {
                 studentMode:
-                  currentProfile.data().studentMode === "independent"
+                  sourceProfile.studentMode === "independent"
                     ? "independent"
                     : "school",
               }
@@ -251,19 +294,19 @@ export const changeUsername = async (newUsernameValue: string) => {
           uid: user.uid,
           username: newUsername,
           photoURL,
-          role: currentProfile.data().role,
-          ...(currentProfile.data().role === "student"
+          role: sourceProfile.role,
+          ...(sourceProfile.role === "student"
             ? {
                 studentMode:
-                  currentProfile.data().studentMode === "independent"
+                  sourceProfile.studentMode === "independent"
                     ? "independent"
                     : "school",
               }
             : {}),
-          createdAt: currentProfile.data().createdAt ?? serverTimestamp(),
+          createdAt: sourceProfile.createdAt ?? serverTimestamp(),
           updatedAt: serverTimestamp(),
         }, { merge: true });
-        transaction.delete(currentRef);
+        if (currentProfile.exists()) transaction.delete(currentRef);
       });
     } catch (error) {
       await updateProfile(user, {
