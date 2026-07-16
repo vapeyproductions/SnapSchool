@@ -125,12 +125,17 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const description = String(formData.get("description") ?? "").trim();
     const teacherDueDate = String(formData.get("dueDate") ?? "").trim();
+    const groupWorkerCountRaw = String(formData.get("groupWorkerCount") ?? "").trim();
+    const groupWorkerCount = groupWorkerCountRaw
+      ? Number.parseInt(groupWorkerCountRaw, 10)
+      : 1;
     const fileValue = formData.get("file");
     const file = fileValue instanceof File && fileValue.size > 0 ? fileValue : null;
 
     if (!description && !file) return errorResponse("Add a description or upload an assignment file", 400);
     if (description.length > 12000) return errorResponse("The description must be 12,000 characters or less", 400);
     if (teacherDueDate && !/^\d{4}-\d{2}-\d{2}$/.test(teacherDueDate)) return errorResponse("Enter a valid due date", 400);
+    if (!Number.isInteger(groupWorkerCount) || groupWorkerCount < 1 || groupWorkerCount > 100) return errorResponse("Enter a valid group size", 400);
     if (file && file.size > MAX_FILE_BYTES) return errorResponse("The uploaded file must be 10 MB or smaller", 400);
     if (file && !IMAGE_TYPES.has(file.type) && !DOCUMENT_TYPES.has(file.type)) {
       return errorResponse("Upload a PNG, JPEG, WebP, GIF, PDF, Word, or text file", 400);
@@ -140,10 +145,14 @@ export async function POST(request: Request) {
       text:
         `Analyze this school assignment for a teacher. Today is ${new Date().toISOString().slice(0, 10)}.\n` +
         `Teacher-provided due date: ${teacherDueDate || "none"}. A teacher-provided date overrides any date found in the source.\n` +
+        `Number of people completing this assignment together: ${groupWorkerCount}.\n` +
         `Teacher description: ${description || "none"}.\n\n` +
         "Extract a concise title and the actual deliverables. Estimate realistic student work time. " +
         "Classify the work as essay, exam, homework, other, project, quiz, reading, or test. " +
         "Recommend 1-60 active workdays and produce exactly one manageable task for each recommended day. " +
+        (groupWorkerCount > 1
+          ? "This is a collaborative assignment. Account for the number of workers, identify tasks that can happen in parallel, include coordination and integration checkpoints, and make each daily step a concrete shared team outcome rather than multiplying the workload by the group size. "
+          : "") +
         "Use calendar time between today and the due date when one is known. Do not invent a due date. " +
         "SPECIAL RULE FOR TESTS, QUIZZES, AND EXAMS: Create a study plan rather than a completion checklist. " +
         "Divide the tested topics across days, name the specific material to review, and include active recall, practice questions, and spaced review. " +

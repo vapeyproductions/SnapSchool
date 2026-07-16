@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarDays, Clock3, Flame } from "lucide-react";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import type {
   Channel,
   ChannelFilters,
@@ -13,6 +13,7 @@ import { ChannelList, useChatContext } from "stream-chat-react";
 import { getAssignmentPriority } from "@/lib/assignment-priority";
 
 type PriorityAssignmentListProps = {
+  channels?: Channel[];
   enabled: boolean;
   filters: ChannelFilters;
   onDailyMinutesChange?: (minutes: number) => void;
@@ -74,6 +75,7 @@ function DailyMinutesReporter({
 }
 
 export function PriorityAssignmentList({
+  channels,
   enabled,
   filters,
   onDailyMinutesChange,
@@ -209,6 +211,23 @@ export function PriorityAssignmentList({
     ),
     [activeChannel?.cid, enabled, onDailyMinutesChange, setActiveChannel],
   );
+
+  const prioritizedChannels = useMemo(
+    () => (channels ? prioritizeChannels([...channels]) : []),
+    [channels, prioritizeChannels],
+  );
+
+  useEffect(() => {
+    if (!channels) return;
+    if (
+      prioritizedChannels.length > 0 &&
+      !prioritizedChannels.some((channel) => channel.cid === activeChannel?.cid)
+    ) {
+      setActiveChannel(prioritizedChannels[0]);
+    }
+  }, [activeChannel?.cid, channels, prioritizedChannels, setActiveChannel]);
+
+  if (channels) return renderChannels(prioritizedChannels);
 
   return (
     <ChannelList

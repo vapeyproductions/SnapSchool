@@ -24,6 +24,9 @@ declare module "stream-chat" {
     daily_plan?: string;
     due_date?: string;
     estimated_total_minutes?: number;
+    group_administrator_ids?: string;
+    group_contributions?: string;
+    group_student_ids?: string;
     last_progress_at?: string;
     last_progress_confidence?: "high" | "medium" | "low";
     last_progress_summary?: string;
@@ -32,5 +35,13 @@ declare module "stream-chat" {
     recommended_work_days?: number;
     remaining_work_summary?: string;
     student_username?: string;
+    teacher_request_created_at?: string;
+    teacher_request_id?: string;
+    teacher_request_question?: string;
+    teacher_request_requested_by?: string;
+    teacher_request_requested_by_name?: string;
+    teacher_request_resolved_at?: string;
+    teacher_request_resolved_by?: string;
+    teacher_request_status?: "open" | "resolved";
   }
 }

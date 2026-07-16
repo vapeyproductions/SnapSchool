@@ -68,11 +68,23 @@ export default function CreateGroupModal({
   const analyzeAssignment = async () => {
     setErrorMessage("");
     if (!user || role !== "administrator") {
-      setErrorMessage("Only administrators can analyze group projects");
+      setErrorMessage("Only administrators can analyze group assignments");
       return;
     }
     if (!description.trim() && !file) {
-      setErrorMessage("Add a description or upload the project instructions");
+      setErrorMessage("Add a description or upload the assignment instructions");
+      return;
+    }
+    const invitedUsernames = [
+      ...new Set(
+        members
+          .split(",")
+          .map((member) => member.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    ];
+    if (invitedUsernames.length < 2) {
+      setErrorMessage("Add at least two group members before analyzing the assignment");
       return;
     }
 
@@ -81,6 +93,7 @@ export default function CreateGroupModal({
       const formData = new FormData();
       formData.set("description", description.trim());
       formData.set("dueDate", dueDate);
+      formData.set("groupWorkerCount", String(invitedUsernames.length + 1));
       if (file) formData.set("file", file);
       const response = await fetch("/api/assignments/analyze", {
         body: formData,
@@ -88,13 +101,13 @@ export default function CreateGroupModal({
         method: "POST",
       });
       const result = (await response.json()) as { analysis?: AssignmentAnalysis; error?: string };
-      if (!response.ok || !result.analysis) throw new Error(result.error ?? "Unable to analyze this project");
-      if (!result.analysis.inputValid) throw new Error(result.analysis.warnings[0] ?? "The project instructions are not readable");
+      if (!response.ok || !result.analysis) throw new Error(result.error ?? "Unable to analyze this group assignment");
+      if (!result.analysis.inputValid) throw new Error(result.analysis.warnings[0] ?? "The assignment instructions are not readable");
       setAnalysis(result.analysis);
       setTitle(result.analysis.suggestedTitle);
       if (!dueDate && result.analysis.detectedDueDate) setDueDate(result.analysis.detectedDueDate);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Unable to analyze this project");
+      setErrorMessage(error instanceof Error ? error.message : "Unable to analyze this group assignment");
     } finally {
       setIsAnalyzing(false);
     }
@@ -103,8 +116,8 @@ export default function CreateGroupModal({
   const handleCreateGroup = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setErrorMessage("");
-    if (!user || role !== "administrator") return setErrorMessage("Only administrators can create group projects");
-    if (!analysis || !dueDate) return setErrorMessage("Analyze the project and confirm its due date first");
+    if (!user || role !== "administrator") return setErrorMessage("Only administrators can create group assignments");
+    if (!analysis || !dueDate) return setErrorMessage("Analyze the assignment and confirm its due date first");
 
     setIsCreating(true);
     try {
@@ -125,9 +138,9 @@ export default function CreateGroupModal({
         title: title.trim(),
       });
       if (success) return setOpen(false);
-      setErrorMessage(error ?? "Unable to create the group project");
+      setErrorMessage(error ?? "Unable to create the group assignment");
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Unable to create the group project");
+      setErrorMessage(error instanceof Error ? error.message : "Unable to create the group assignment");
     } finally {
       setIsCreating(false);
     }
@@ -136,8 +149,8 @@ export default function CreateGroupModal({
   return (
     <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl sm:max-w-2xl">
       <DialogHeader>
-        <DialogTitle>Create an AI-planned group project</DialogTitle>
-        <DialogDescription>Add at least two people, including at least one student. Multiple administrators are welcome.</DialogDescription>
+        <DialogTitle>Create an AI-planned group assignment</DialogTitle>
+        <DialogDescription>Add at least two people, including at least one student. AI will account for the team size, shared workload, deadline, and coordination steps.</DialogDescription>
       </DialogHeader>
       <form className="space-y-4" onSubmit={handleCreateGroup}>
         <label className="block space-y-2 text-sm font-medium">
@@ -150,17 +163,17 @@ export default function CreateGroupModal({
               {classes.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.id}>{schoolClass.name}</option>)}
             </select>
           )}
-          {!isLoadingClasses && classes.length === 0 && <span className="block text-xs text-amber-700">Create a class before starting a group project.</span>}
+          {!isLoadingClasses && classes.length === 0 && <span className="block text-xs text-amber-700">Create a class before starting a group assignment.</span>}
         </label>
         <label className="block space-y-2 text-sm font-medium">Student and administrator usernames<input className="w-full rounded-xl border border-slate-300 px-3 py-2.5" onChange={(event) => setMembers(event.target.value)} placeholder="alex, ms.jones, taylor" required value={members} /><span className="block text-xs font-normal text-slate-500">Comma-separated. You are added automatically.</span></label>
-        <label className="block space-y-2 text-sm font-medium">Project description<textarea className="min-h-28 w-full rounded-xl border border-slate-300 px-3 py-2.5" maxLength={12000} onChange={(event) => setDescription(event.target.value)} placeholder="Describe the project requirements, or upload them below." value={description} /></label>
+        <label className="block space-y-2 text-sm font-medium">Assignment description<textarea className="min-h-28 w-full rounded-xl border border-slate-300 px-3 py-2.5" maxLength={12000} onChange={(event) => setDescription(event.target.value)} placeholder="Describe the group requirements, or upload them below." value={description} /></label>
         <label className="block space-y-2 text-sm font-medium">Screenshot or document (optional)<input accept=".gif,.jpeg,.jpg,.pdf,.png,.txt,.webp,.doc,.docx" className="block w-full rounded-xl border border-dashed border-indigo-300 p-3 text-xs" onChange={(event) => setFile(event.target.files?.[0] ?? null)} type="file" /><span className="block text-xs font-normal text-slate-500">Maximum 10 MB. Avoid student names, grades, or private information.</span></label>
         <label className="block space-y-2 text-sm font-medium">Due date (optional before analysis)<input className="w-full rounded-xl border border-slate-300 px-3 py-2.5" min={new Date().toISOString().slice(0, 10)} onChange={(event) => setDueDate(event.target.value)} type="date" value={dueDate} /></label>
-        <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 font-medium text-white disabled:opacity-60" disabled={isAnalyzing || (!description.trim() && !file)} onClick={() => void analyzeAssignment()} type="button">{isAnalyzing ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}{isAnalyzing ? "Analyzing project..." : analysis ? "Analyze again" : "Analyze with AI"}</button>
+        <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 font-medium text-white disabled:opacity-60" disabled={isAnalyzing || (!description.trim() && !file)} onClick={() => void analyzeAssignment()} type="button">{isAnalyzing ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}{isAnalyzing ? "Analyzing assignment..." : analysis ? "Analyze again" : "Analyze with AI"}</button>
 
         {analysis && <section className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4"><p className="font-semibold">Review the suggested plan</p><p className="text-xs text-slate-600">AI estimates can be wrong. Confirm everything before creating the project.</p><label className="block space-y-2 text-sm font-medium">Project title<input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5" maxLength={100} minLength={3} onChange={(event) => setTitle(event.target.value)} required value={title} /></label><label className="block space-y-2 text-sm font-medium">Due date (required)<input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5" min={new Date().toISOString().slice(0, 10)} onChange={(event) => setDueDate(event.target.value)} required type="date" value={dueDate} /></label><div className="grid grid-cols-2 gap-2 text-sm"><div className="rounded-xl bg-white p-3"><span className="block text-slate-500">Effort</span><strong>{analysis.estimatedTotalMinutes} min</strong></div><div className="rounded-xl bg-white p-3"><span className="block text-slate-500">Streak target</span><strong>{analysis.recommendedWorkDays} days</strong></div></div><p className="text-sm leading-6 text-slate-600">{analysis.assignmentSummary}</p><ol className="space-y-2">{analysis.dailyTasks.map((task) => <li className="rounded-xl bg-white p-3 text-sm" key={task.dayNumber}><strong>Day {task.dayNumber}: {task.title}</strong><span className="float-right text-slate-500">{task.estimatedMinutes} min</span><p className="mt-1 text-slate-600">{task.description}</p></li>)}</ol></section>}
         {errorMessage && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{errorMessage}</p>}
-        {analysis && <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white disabled:opacity-60" disabled={isCreating || !classId || !dueDate || !title.trim()} type="submit">{isCreating && <Loader2 className="size-4 animate-spin" />}{isCreating ? "Creating project..." : "Create group project"}</button>}
+        {analysis && <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white disabled:opacity-60" disabled={isCreating || !classId || !dueDate || !title.trim()} type="submit">{isCreating && <Loader2 className="size-4 animate-spin" />}{isCreating ? "Creating assignment..." : "Create group assignment"}</button>}
       </form>
     </DialogContent>
   );

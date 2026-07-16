@@ -28,6 +28,7 @@ import {
 import { AssignmentPlanPanel } from "./AssignmentPlanPanel";
 import AuthContext from "./AuthContext";
 import { StudentProgressSubmission } from "./StudentProgressSubmission";
+import { RequestTeacherButton } from "./RequestTeacherButton";
 
 type ChannelContentProps = {
   user: User;
@@ -93,6 +94,7 @@ export function ChannelContent({
   const isAssessment = ["exam", "quiz", "test"].includes(
     channel.data?.assignment_kind ?? "",
   );
+  const isGroupAssignment = channel.data?.assignment_type === "group";
 
   useEffect(() => {
     if (!channel.cid) return;
@@ -256,7 +258,11 @@ export function ChannelContent({
                 type="button"
               >
                 <ClipboardList className="size-4" />
-                {isAssessment ? "Study plan" : "Assignment plan"}
+                {isGroupAssignment
+                  ? "Group plan"
+                  : isAssessment
+                    ? "Study plan"
+                    : "Assignment plan"}
               </button>
               <button
                 className={`flex items-center justify-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold transition ${
@@ -268,7 +274,11 @@ export function ChannelContent({
                 type="button"
               >
                 <MessageCircleQuestion className="size-4" />
-                {role === "student" ? "Ask teacher" : "Messages"}
+                {isGroupAssignment
+                  ? "Group chat"
+                  : role === "student"
+                    ? "Ask teacher"
+                    : "Messages"}
               </button>
             </div>
           </div>
@@ -312,9 +322,14 @@ export function ChannelContent({
           <div className="flex min-h-0 flex-1 flex-col bg-white">
             <div className="shrink-0 border-b-2 border-black bg-[#c7b7ff] px-4 py-2.5 text-xs font-semibold leading-5 text-black">
               {role === "student"
-                ? "Ask your teacher a question about this assignment. Your conversation stays attached to this work."
+                ? isGroupAssignment
+                  ? "Work together here. Use Request teacher only when the group needs direct help."
+                  : "Ask your teacher a question about this assignment. Your conversation stays attached to this work."
                 : "Answer student questions and discuss this assignment here."}
             </div>
+            {role === "student" && isGroupAssignment && (
+              <RequestTeacherButton channel={channel} user={user} />
+            )}
             <MessageList />
             <MessageComposer />
           </div>

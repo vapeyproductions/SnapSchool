@@ -3,10 +3,8 @@
 import {
   Bell,
   BookOpen,
-  Camera,
   Flame,
   LogOut,
-  MessageCircleMore,
   Plus,
   School,
 } from "lucide-react";
@@ -16,7 +14,6 @@ import { useContext, useState } from "react";
 import AuthContext from "@/app/components/AuthContext";
 import CreateGroupModal from "@/app/components/CreateGroupModal";
 import CreateStreakModal from "@/app/components/CreateStreakModal";
-import GroupChatPage from "@/app/components/GroupChatPage";
 import ManageClassesModal from "@/app/components/ManageClassesModal";
 import StreakPage from "@/app/components/StreakPage";
 import StreakReminderModal from "@/app/components/StreakReminderModal";
@@ -25,12 +22,9 @@ import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { clearCachedAccountRole } from "@/lib/auth-role-cache";
 import { logoutUser } from "@/lib/server";
 
-type ChatView = "individual" | "groups";
-
 export default function ChatPage() {
   const { role, user } = useContext(AuthContext);
   const router = useRouter();
-  const [view, setView] = useState<ChatView>("individual");
   const [openStreakModal, setOpenStreakModal] = useState(false);
   const [openGroupModal, setOpenGroupModal] = useState(false);
   const [openClassesModal, setOpenClassesModal] = useState(false);
@@ -60,7 +54,7 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="snapschool-shell min-h-screen pb-24 text-[#171717] lg:pb-0">
+    <div className="snapschool-shell min-h-screen text-[#171717]">
       <header className="sticky top-0 z-40 border-b-2 border-black bg-[#fffc00]">
         <div className="mx-auto flex h-[4.5rem] max-w-[1540px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
@@ -77,26 +71,9 @@ export default function ChatPage() {
           </div>
 
           {!isAdministrator && (
-          <div className="hidden items-center gap-1 rounded-full border-2 border-black bg-white p-1 md:flex">
-            <button
-              className={`rounded-full px-5 py-2 text-sm font-extrabold transition ${
-                view === "individual" ? "bg-black text-white" : "hover:bg-zinc-100"
-              }`}
-              onClick={() => setView("individual")}
-              type="button"
-            >
-              Individual assignments
-            </button>
-            <button
-              className={`rounded-full px-5 py-2 text-sm font-extrabold transition ${
-                view === "groups" ? "bg-black text-white" : "hover:bg-zinc-100"
-              }`}
-              onClick={() => setView("groups")}
-              type="button"
-            >
-              Group projects
-            </button>
-          </div>
+            <div className="hidden rounded-full border-2 border-black bg-black px-6 py-2 text-sm font-extrabold text-white md:block">
+              Assignments
+            </div>
           )}
 
           <div className="flex items-center gap-2">
@@ -175,23 +152,23 @@ export default function ChatPage() {
         </section>
 
         <section className="social-workspace overflow-hidden border-2 border-black bg-white shadow-[7px_7px_0_#111]">
-          {(isAdministrator || view === "groups") && (
+          {isAdministrator && (
           <div className="flex flex-col gap-3 border-b-2 border-black bg-[#f4f0e8] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
             <div className="flex items-center gap-3">
               <span className="flex size-9 items-center justify-center rounded-full bg-black text-white">
-                {view === "individual" ? <Flame className="size-5 fill-current" /> : <MessageCircleMore className="size-5" />}
+                <School className="size-5" />
               </span>
               <div>
                 <h2 className="font-black tracking-tight">
                   {isAdministrator ? "Classes" : "Project circles"}
                 </h2>
                 <p className="text-xs font-medium text-zinc-500">
-                  {isAdministrator ? "Assignments, class progress, and student questions" : "Shared work, messages, and progress"}
+                  Assignments, class progress, and teacher requests
                 </p>
               </div>
             </div>
 
-            {isAdministrator && view === "individual" ? (
+            {isAdministrator ? (
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Dialog open={openClassesModal} onOpenChange={setOpenClassesModal}>
                   <DialogTrigger render={<Button className="h-10 rounded-full border-2 border-black bg-white px-4 font-bold text-black hover:bg-zinc-100" />}>
@@ -207,7 +184,7 @@ export default function ChatPage() {
                 </Dialog>
                 <Dialog open={openGroupModal} onOpenChange={setOpenGroupModal}>
                   <DialogTrigger render={<Button className="h-10 rounded-full border-2 border-black bg-[#c7b7ff] px-4 font-black text-black hover:bg-[#b7a4ff]" />}>
-                    <Plus /> Group project
+                    <Plus /> Group assignment
                   </DialogTrigger>
                   <CreateGroupModal setOpen={setOpenGroupModal} />
                 </Dialog>
@@ -217,32 +194,14 @@ export default function ChatPage() {
           )}
 
           <div className="p-2 sm:p-4">
-            {!isAdministrator && view === "groups" ? (
-              <GroupChatPage />
-            ) : (
-              <StreakPage
-                onDailyMinutesChange={setDailyEstimatedMinutes}
-                setReminderMessage={setReminderMessage}
-                setStreakReminder={setStreakReminder}
-              />
-            )}
+            <StreakPage
+              onDailyMinutesChange={setDailyEstimatedMinutes}
+              setReminderMessage={setReminderMessage}
+              setStreakReminder={setStreakReminder}
+            />
           </div>
         </section>
       </main>
-
-      {!isAdministrator && (
-      <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-3 border-t-2 border-black bg-white px-3 pb-[max(0.55rem,env(safe-area-inset-bottom))] pt-2 md:hidden">
-        <button className={`flex flex-col items-center gap-1 text-[10px] font-black ${view === "individual" ? "text-black" : "text-zinc-400"}`} onClick={() => setView("individual")} type="button">
-          <Flame className={`size-5 ${view === "individual" ? "fill-[#ff5b35] text-[#ff5b35]" : ""}`} /> Streaks
-        </button>
-        <button className="mx-auto -mt-6 flex size-14 items-center justify-center rounded-full border-2 border-black bg-[#fffc00] shadow-[3px_3px_0_#111]" onClick={() => setView("individual")} type="button" aria-label="Open progress capture">
-          <Camera className="size-6" />
-        </button>
-        <button className={`flex flex-col items-center gap-1 text-[10px] font-black ${view === "groups" ? "text-black" : "text-zinc-400"}`} onClick={() => setView("groups")} type="button">
-          <MessageCircleMore className="size-5" /> Projects
-        </button>
-      </nav>
-      )}
 
       <Dialog open={streakReminder} onOpenChange={setStreakReminder}>
         <StreakReminderModal reminderMessage={reminderMessage} />

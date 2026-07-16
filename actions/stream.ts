@@ -908,6 +908,23 @@ export const createAssignmentChannel = async (
         class_id: schoolClass?.id,
         class_name: schoolClass?.name,
         created_by_id: creator.uid,
+        group_administrator_ids:
+          data.assignmentType === "group"
+            ? JSON.stringify([
+                creator.uid,
+                ...invitedProfiles
+                  .filter((profile) => profile.role === "administrator")
+                  .map((profile) => profile.uid),
+              ])
+            : undefined,
+        group_student_ids:
+          data.assignmentType === "group"
+            ? JSON.stringify(
+                invitedProfiles
+                  .filter((profile) => profile.role === "student")
+                  .map((profile) => profile.uid),
+              )
+            : undefined,
         members,
         name: title,
       },
@@ -1138,6 +1155,120 @@ export const amendStudentAssignmentDueDate = async (data: {
       amendedDueDate: null,
       error: error instanceof Error ? error.message : "Unable to amend the due date",
       originalDueDate: null,
+      success: false,
+    };
+  }
+};
+
+export const requestTeacherForGroupAssignment = async (data: {
+  channelCid: string;
+  firebaseIdToken: string;
+  question: string;
+}) => {
+  try {
+    const student = await authenticateCaller(data.firebaseIdToken);
+    if (student.role !== "student") {
+      throw new Error("Only students can request a teacher from a group assignment");
+    }
+
+    const question = data.question.trim();
+    if (question.length < 5 || question.length > 500) {
+      throw new Error("Enter a question between 5 and 500 characters");
+    }
+    if (!/^(messaging|livestream):[a-zA-Z0-9_-]{1,100}$/.test(data.channelCid)) {
+      throw new Error("Select a valid group assignment");
+    }
+
+    const separator = data.channelCid.indexOf(":");
+    const channel = serverClient.channel(
+      data.channelCid.slice(0, separator),
+      data.channelCid.slice(separator + 1),
+    );
+    await channel.query();
+    if (!channel.state.members[student.uid]) {
+      throw new Error("You are not a member of this group assignment");
+    }
+    if (channel.data?.assignment_type !== "group") {
+      throw new Error("Teacher requests are available in group assignments");
+    }
+    if (channel.data.teacher_request_status === "open") {
+      throw new Error("This group already has an open teacher request");
+    }
+
+    const requestId = crypto.randomUUID();
+    const createdAt = new Date().toISOString();
+    await channel.updatePartial({
+      set: {
+        teacher_request_created_at: createdAt,
+        teacher_request_id: requestId,
+        teacher_request_question: question,
+        teacher_request_requested_by: student.uid,
+        teacher_request_requested_by_name: student.username,
+        teacher_request_status: "open",
+      },
+      unset: ["teacher_request_resolved_at", "teacher_request_resolved_by"],
+    });
+    await channel.sendMessage({
+      text: `🙋 Teacher requested: ${question}`,
+      user_id: student.uid,
+    });
+
+    return {
+      createdAt,
+      error: null,
+      question,
+      requestId,
+      requestedBy: student.uid,
+      requestedByName: student.username,
+      success: true,
+    };
+  } catch (error) {
+    return {
+      createdAt: null,
+      error: error instanceof Error ? error.message : "Unable to request the teacher",
+      question: null,
+      requestId: null,
+      requestedBy: null,
+      requestedByName: null,
+      success: false,
+    };
+  }
+};
+
+export const resolveGroupTeacherRequest = async (data: {
+  channelCid: string;
+  firebaseIdToken: string;
+  requestId: string;
+}) => {
+  try {
+    const administrator = await authenticateCaller(data.firebaseIdToken);
+    if (administrator.role !== "administrator") {
+      throw new Error("Only administrators can resolve teacher requests");
+    }
+    const [{ channel, data: channelData }] =
+      await loadAuthorizedAssignmentChannels(data.firebaseIdToken, [data.channelCid]);
+    if (
+      channelData.assignment_type !== "group" ||
+      channelData.teacher_request_status !== "open" ||
+      channelData.teacher_request_id !== data.requestId
+    ) {
+      throw new Error("This teacher request is no longer open");
+    }
+
+    const resolvedAt = new Date().toISOString();
+    await channel.updatePartial({
+      set: {
+        teacher_request_resolved_at: resolvedAt,
+        teacher_request_resolved_by: administrator.uid,
+        teacher_request_status: "resolved",
+      },
+    });
+
+    return { error: null, resolvedAt, success: true };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : "Unable to resolve the teacher request",
+      resolvedAt: null,
       success: false,
     };
   }

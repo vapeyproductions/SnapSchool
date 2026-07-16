@@ -6,6 +6,7 @@ import {
   CalendarClock,
   CalendarDays,
   CheckCircle2,
+  CircleCheckBig,
   ChevronRight,
   CircleUserRound,
   FileImage,
@@ -25,6 +26,7 @@ import {
   amendStudentAssignmentDueDate,
   deletePublishedAssignment,
   getAdministratorClasses,
+  resolveGroupTeacherRequest,
   type SchoolClassSummary,
   updatePublishedAssignment,
 } from "@/actions/stream";
@@ -41,7 +43,7 @@ import { getAssignmentPriority } from "@/lib/assignment-priority";
 
 import { useGetStreamClient } from "./useGetStreamClient";
 
-type DashboardTab = "messages" | "overview" | "progress";
+type DashboardTab = "group-chat" | "messages" | "overview" | "progress";
 type AssignmentKind =
   | "essay"
   | "exam"
@@ -55,6 +57,13 @@ type AssignmentKind =
 type DailyTask = {
   estimatedMinutes?: number;
   title?: string;
+};
+
+type GroupContribution = {
+  lastProgressAt?: string;
+  progressSummary?: string;
+  submissionCount?: number;
+  username?: string;
 };
 
 type AssignmentGroup = {
@@ -80,6 +89,28 @@ const parseDailyPlan = (channel: StreamChannel): DailyTask[] => {
     return Array.isArray(plan) ? plan : [];
   } catch {
     return [];
+  }
+};
+
+const parseStringArray = (value?: string): string[] => {
+  if (!value) return [];
+  try {
+    const result = JSON.parse(value) as string[];
+    return Array.isArray(result) ? result : [];
+  } catch {
+    return [];
+  }
+};
+
+const parseGroupContributions = (
+  channel: StreamChannel,
+): Record<string, GroupContribution> => {
+  if (!channel.data?.group_contributions) return {};
+  try {
+    const result = JSON.parse(channel.data.group_contributions) as Record<string, GroupContribution>;
+    return result && typeof result === "object" ? result : {};
+  } catch {
+    return {};
   }
 };
 
@@ -368,6 +399,61 @@ function StudentDueDateAmendment({
   );
 }
 
+function ResolveTeacherRequestButton({
+  channel,
+  onResolved,
+  user,
+}: {
+  channel: StreamChannel;
+  onResolved: (channelCid: string) => void;
+  user: User;
+}) {
+  const [isResolving, setIsResolving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const requestId = channel.data?.teacher_request_id;
+
+  if (
+    channel.data?.assignment_type !== "group" ||
+    channel.data?.teacher_request_status !== "open" ||
+    !requestId
+  ) {
+    return null;
+  }
+
+  const resolveRequest = async () => {
+    setIsResolving(true);
+    setErrorMessage("");
+    try {
+      const result = await resolveGroupTeacherRequest({
+        channelCid: channel.cid,
+        firebaseIdToken: await user.getIdToken(),
+        requestId,
+      });
+      if (!result.success) {
+        setErrorMessage(result.error ?? "Unable to resolve the request");
+        return;
+      }
+      onResolved(channel.cid);
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Unable to resolve the request",
+      );
+    } finally {
+      setIsResolving(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <Button className="rounded-full border-2 border-black bg-[#fffc00] px-3 text-xs font-black text-black hover:bg-[#f3ef00]" disabled={isResolving} onClick={() => void resolveRequest()} type="button">
+        {isResolving ? <Loader2 className="size-4 animate-spin" /> : <CircleCheckBig className="size-4" />}
+        {isResolving ? "Resolving…" : "Mark resolved"}
+      </Button>
+      {errorMessage && <p className="max-w-56 text-right text-[10px] font-semibold text-red-700" role="alert">{errorMessage}</p>}
+    </div>
+  );
+}
+
 function LoadingDashboard() {
   return (
     <div className="flex min-h-[36rem] items-center justify-center gap-2 text-sm font-semibold text-zinc-500">
@@ -508,20 +594,38 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
       isStudentOverdue(channel, todayString),
     ).length ?? 0;
   const messageThreads = (selectedAssignment?.channels ?? [])
-    .map((channel) => ({
-      channel,
-      message: [...channel.state.messages]
+    .map((channel) => {
+      if (channel.data?.assignment_type === "group") {
+        const isOpen = channel.data.teacher_request_status === "open";
+        return {
+          channel,
+          createdAt: isOpen ? channel.data.teacher_request_created_at : undefined,
+          preview: isOpen ? channel.data.teacher_request_question : undefined,
+          teacherRequest: true,
+        };
+      }
+
+      const message = [...channel.state.messages]
         .reverse()
-        .find((message) => isStudentMessage(channel, message)),
-    }))
-    .filter((thread) => Boolean(thread.message))
+        .find((item) => isStudentMessage(channel, item));
+      return {
+        channel,
+        createdAt: message?.created_at,
+        preview: message?.text,
+        teacherRequest: false,
+      };
+    })
+    .filter((thread) => Boolean(thread.preview))
     .sort(
       (first, second) =>
-        new Date(second.message?.created_at ?? 0).getTime() -
-        new Date(first.message?.created_at ?? 0).getTime(),
+        new Date(second.createdAt ?? 0).getTime() -
+        new Date(first.createdAt ?? 0).getTime(),
     );
   const replyChannel = selectedAssignment?.channels.find(
     (channel) => channel.cid === replyChannelCid,
+  );
+  const groupAssignmentChannel = selectedAssignment?.channels.find(
+    (channel) => channel.data?.assignment_type === "group",
   );
 
   if (!client || loading) return <LoadingDashboard />;
@@ -589,7 +693,13 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
                   ) / assignment.channels.length,
                 );
                 const unread = assignment.channels.reduce(
-                  (total, channel) => total + channel.countUnread(),
+                  (total, channel) =>
+                    total +
+                    (channel.data?.assignment_type === "group"
+                      ? channel.data.teacher_request_status === "open"
+                        ? 1
+                        : 0
+                      : channel.countUnread()),
                   0,
                 );
                 const priority = getAssignmentPriority(assignment.channels[0].data ?? {});
@@ -711,6 +821,9 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
                     ["overview", "Overview"],
                     ["messages", `Notifications (${messageThreads.length})`],
                     ["progress", "Student progress"],
+                    ...(groupAssignmentChannel
+                      ? [["group-chat", "Group chat"] as const]
+                      : []),
                   ] as const).map(([value, label]) => (
                     <button
                       className={`shrink-0 rounded-full px-4 py-2 text-xs font-black ${tab === value ? "bg-black text-white" : "hover:bg-white"}`}
@@ -784,7 +897,7 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
                       {messageThreads.length === 0 ? (
                         <p className="rounded-2xl border-2 border-dashed border-zinc-300 p-5 text-center text-sm text-zinc-500">No student questions yet.</p>
                       ) : (
-                        messageThreads.map(({ channel, message }) => (
+                        messageThreads.map(({ channel, preview, teacherRequest }) => (
                           <button
                             className={`rounded-2xl border-2 p-3 text-left ${replyChannelCid === channel.cid ? "border-black bg-[#fffbd5]" : "border-zinc-200 bg-white"}`}
                             key={channel.cid}
@@ -792,10 +905,14 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
                             type="button"
                           >
                             <span className="flex items-center justify-between gap-2">
-                              <strong className="truncate text-sm capitalize">{studentName(channel)}</strong>
+                              <strong className="truncate text-sm capitalize">
+                                {teacherRequest
+                                  ? `Teacher request · ${channel.data?.teacher_request_requested_by_name || "Group"}`
+                                  : studentName(channel)}
+                              </strong>
                               {channel.countUnread() > 0 && <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white">New</span>}
                             </span>
-                            <span className="mt-1 block truncate text-xs text-zinc-600">{message?.text}</span>
+                            <span className="mt-1 block truncate text-xs text-zinc-600">{preview}</span>
                           </button>
                         ))
                       )}
@@ -805,9 +922,37 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
                     {replyChannel ? (
                       <Channel channel={replyChannel}>
                         <Window>
-                          <div className="border-b-2 border-black bg-[#c7b7ff] px-4 py-3">
-                            <p className="font-black capitalize">Reply to {studentName(replyChannel)}</p>
-                            <p className="text-xs">This response stays attached to {selectedAssignment.title}.</p>
+                          <div className="flex flex-wrap items-start justify-between gap-3 border-b-2 border-black bg-[#c7b7ff] px-4 py-3">
+                            <div>
+                              <p className="font-black capitalize">
+                                {replyChannel.data?.assignment_type === "group"
+                                  ? "Group teacher request"
+                                  : `Reply to ${studentName(replyChannel)}`}
+                              </p>
+                              <p className="text-xs">
+                                {replyChannel.data?.assignment_type === "group"
+                                  ? replyChannel.data.teacher_request_question
+                                  : `This response stays attached to ${selectedAssignment.title}.`}
+                              </p>
+                            </div>
+                            <ResolveTeacherRequestButton
+                              channel={replyChannel}
+                              onResolved={(channelCid) => {
+                                setChannels((current) =>
+                                  current.map((item) => {
+                                    if (item.cid !== channelCid) return item;
+                                    item.data = {
+                                      ...item.data,
+                                      teacher_request_resolved_at: new Date().toISOString(),
+                                      teacher_request_status: "resolved",
+                                    };
+                                    return item;
+                                  }),
+                                );
+                                setReplyChannelCid("");
+                              }}
+                              user={user}
+                            />
                           </div>
                           <MessageList />
                           <MessageComposer />
@@ -819,6 +964,42 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
                       </div>
                     )}
                   </div>
+                </section>
+              )}
+
+              {tab === "group-chat" && groupAssignmentChannel && (
+                <section className="min-h-[34rem] bg-white">
+                  <Channel channel={groupAssignmentChannel}>
+                    <Window>
+                      <div className="flex flex-wrap items-start justify-between gap-3 border-b-2 border-black bg-[#c7b7ff] px-4 py-3">
+                        <div>
+                          <p className="font-black">Group assignment chat</p>
+                          <p className="text-xs">
+                            View team coordination without receiving notifications for ordinary group messages.
+                          </p>
+                        </div>
+                        <ResolveTeacherRequestButton
+                          channel={groupAssignmentChannel}
+                          onResolved={(channelCid) => {
+                            setChannels((current) =>
+                              current.map((item) => {
+                                if (item.cid !== channelCid) return item;
+                                item.data = {
+                                  ...item.data,
+                                  teacher_request_resolved_at: new Date().toISOString(),
+                                  teacher_request_status: "resolved",
+                                };
+                                return item;
+                              }),
+                            );
+                          }}
+                          user={user}
+                        />
+                      </div>
+                      <MessageList />
+                      <MessageComposer />
+                    </Window>
+                  </Channel>
                 </section>
               )}
 
@@ -844,6 +1025,14 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
                       );
                       const percent = progressPercent(channel);
                       const urgent = isStudentOverdue(channel, todayString);
+                      const progressOwner =
+                        channel.data?.assignment_type === "group"
+                          ? "Shared group progress"
+                          : studentName(channel);
+                      const groupContributions = parseGroupContributions(channel);
+                      const groupStudentIds = parseStringArray(
+                        channel.data?.group_student_ids,
+                      );
 
                       return (
                         <details className={`group rounded-2xl border-2 bg-white shadow-[3px_3px_0_#111] ${urgent ? "border-red-700" : "border-black"}`} key={channel.cid}>
@@ -851,7 +1040,7 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
                             <CircleUserRound className="size-8 shrink-0" />
                             <span className="min-w-0 flex-1">
                               <span className="flex flex-wrap items-center gap-2">
-                                <strong className="truncate capitalize">{studentName(channel)}</strong>
+                                <strong className="truncate capitalize">{progressOwner}</strong>
                                 {urgent && <span className="rounded-full bg-red-700 px-2 py-0.5 text-[10px] font-black tracking-wider text-white">URGENT</span>}
                               </span>
                               <span className="mt-1 block h-2 overflow-hidden rounded-full bg-zinc-200"><span className={`block h-full ${urgent ? "bg-red-600" : "bg-[#7b61ff]"}`} style={{ width: `${percent}%` }} /></span>
@@ -863,6 +1052,30 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
                             <div>
                               <p className="text-xs font-black uppercase tracking-wider">Progress so far</p>
                               <p className="mt-2 text-sm leading-6 text-zinc-700">{channel.data?.last_progress_summary || "No reviewed progress has been submitted yet."}</p>
+                              {channel.data?.assignment_type === "group" && groupStudentIds.length > 0 && (
+                                <div className="mt-3 rounded-xl border border-zinc-300 bg-white p-3">
+                                  <p className="text-xs font-black uppercase tracking-wider">Visible member contributions</p>
+                                  <div className="mt-2 grid gap-2">
+                                    {groupStudentIds.map((studentId) => {
+                                      const contribution = groupContributions[studentId];
+                                      const memberName =
+                                        contribution?.username ||
+                                        channel.state.members[studentId]?.user?.name ||
+                                        "Student";
+                                      return (
+                                        <div className="flex items-center justify-between gap-2 text-xs" key={studentId}>
+                                          <span className="truncate capitalize">{memberName}</span>
+                                          <span className={`shrink-0 rounded-full px-2 py-0.5 font-bold ${contribution ? "bg-emerald-100 text-emerald-800" : "bg-zinc-100 text-zinc-600"}`}>
+                                            {contribution
+                                              ? `${contribution.submissionCount ?? 1} reviewed`
+                                              : "No reviewed evidence"}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
                               {channel.data?.remaining_work_summary && <p className="mt-2 rounded-xl bg-white p-3 text-xs leading-5"><strong>Still to do:</strong> {channel.data.remaining_work_summary}</p>}
                               {urgent && channel.data?.student_username && (
                                 <StudentDueDateAmendment

@@ -28,6 +28,13 @@ type FirestoreValue = {
   stringValue?: string;
 };
 
+type GroupContribution = {
+  lastProgressAt: string;
+  progressSummary: string;
+  submissionCount: number;
+  username: string;
+};
+
 const errorResponse = (message: string, status: number) =>
   Response.json({ error: message }, { status });
 
@@ -164,6 +171,26 @@ export async function POST(request: Request) {
     if (!channel.data?.assignment_title || !channel.data?.due_date || !channel.data?.daily_plan) {
       return errorResponse("This conversation does not have an AI assignment plan", 400);
     }
+    const isGroupAssignment = channel.data.assignment_type === "group";
+    const groupMemberCount = Object.keys(channel.state.members).length;
+    let groupContributions: Record<string, GroupContribution> = {};
+    if (isGroupAssignment && typeof channel.data.group_contributions === "string") {
+      try {
+        groupContributions = JSON.parse(channel.data.group_contributions) as Record<string, GroupContribution>;
+      } catch {
+        groupContributions = {};
+      }
+    }
+    const recentGroupActivity = isGroupAssignment
+      ? channel.state.messages
+          .slice(-20)
+          .filter((message) => !message.text?.startsWith("🤖 AI progress review:"))
+          .map((message) => ({
+            attachments: message.attachments?.length ?? 0,
+            member: message.user?.name || message.user?.id || "group member",
+            text: message.text?.slice(0, 250) || "attachment shared",
+          }))
+      : [];
 
     const today = new Date().toISOString().slice(0, 10);
     const dueDate = channel.data.due_date;
@@ -196,6 +223,9 @@ export async function POST(request: Request) {
       text:
         `Review a student's visible progress evidence for the assignment "${channel.data.assignment_title}".\n` +
         `Assignment kind: ${channel.data.assignment_kind ?? "other"}. For a test, quiz, or exam, evidence may include notes, flashcards, practice questions, corrections, or other visible study work; evaluate preparation progress rather than a finished deliverable.\n` +
+        (isGroupAssignment
+          ? `This is a shared group assignment with ${groupMemberCount} channel members. Review progress toward the team's shared outcome, not only the submitting student's individual effort. Previously reviewed member contributions: ${JSON.stringify(groupContributions)}. Recent visible group activity: ${JSON.stringify(recentGroupActivity)}. Use this activity to recognize work members have reported or shared, identify visible gaps, and propose coordinated next steps. Do not assume unreported work is complete.\n`
+          : "") +
         `Today: ${today}. Due date: ${dueDate}. Calendar days before the deadline including today: ${availableDays}.\n` +
         `Planning window: ${planningWindowDays} days. ${availableDays === 0 ? "The deadline has passed, so create an accelerated recovery plan and strongly encourage immediate communication with the teacher." : "Keep the plan within the original deadline."}\n` +
         `Assignment summary: ${channel.data.assignment_summary ?? "Not provided"}.\n` +
@@ -205,6 +235,9 @@ export async function POST(request: Request) {
         "Judge only work visibly supported by the uploaded evidence; do not infer hidden work and do not grade correctness. " +
         "Set progressSufficient true only when the evidence shows meaningful progress toward today's planned assignment work. " +
         "Then describe what is complete, what remains, and rebuild the remaining plan so it fits within the planning window. " +
+        (isGroupAssignment
+          ? "For the revised group plan, use concrete team outcomes, parallel work where appropriate, and coordination or integration checkpoints. "
+          : "") +
         "Return zero remaining days and no tasks only when the assignment appears complete. " +
         "If evidence is unclear, use low confidence, do not complete the day, and explain how to resubmit. " +
         "The revisedDailyTasks array must contain exactly recommendedRemainingWorkDays tasks and must not exceed the planning window.",
@@ -270,12 +303,27 @@ export async function POST(request: Request) {
     ];
     const newTargetDays = newCompletedWorkDays + revisedRemainingTasks.length;
     const remainingMinutes = revisedRemainingTasks.reduce((sum, task) => sum + task.estimatedMinutes, 0);
+    const updatedGroupContributions = isGroupAssignment
+      ? {
+          ...groupContributions,
+          [student.uid]: {
+            lastProgressAt: new Date().toISOString(),
+            progressSummary: analysis.progressSummary,
+            submissionCount:
+              (groupContributions[student.uid]?.submissionCount ?? 0) + 1,
+            username: student.username,
+          },
+        }
+      : null;
 
     await channel.updatePartial({
       set: {
         completed_work_days: newCompletedWorkDays,
         daily_plan: JSON.stringify(revisedPlan),
         estimated_total_minutes: remainingMinutes,
+        ...(updatedGroupContributions
+          ? { group_contributions: JSON.stringify(updatedGroupContributions) }
+          : {}),
         last_progress_at: new Date().toISOString(),
         last_progress_confidence: analysis.confidence,
         last_progress_summary: analysis.progressSummary,

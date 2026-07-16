@@ -6,8 +6,15 @@ import {
   type Dispatch,
   type SetStateAction,
   useContext,
+  useEffect,
+  useMemo,
+  useState,
 } from "react";
-import type { ChannelFilters, ChannelSort } from "stream-chat";
+import type {
+  Channel as StreamChannel,
+  ChannelFilters,
+  ChannelSort,
+} from "stream-chat";
 import { Channel, Chat } from "stream-chat-react";
 
 import AdministratorClassDashboard from "./AdministratorClassDashboard";
@@ -40,12 +47,56 @@ function AuthenticatedStreakPage({
   setStreakReminder,
 }: StreakPageProps & { user: User }) {
   const { client } = useGetStreamClient(user);
+  const [assignmentChannels, setAssignmentChannels] = useState<StreamChannel[]>([]);
+  const [channelError, setChannelError] = useState("");
   const filters: ChannelFilters = {
     members: { $in: [user.uid] },
     type: "messaging",
   };
   const options = { presence: true, state: true };
-  const sort: ChannelSort = { last_message_at: -1 };
+  const sort = useMemo<ChannelSort>(() => ({ last_message_at: -1 }), []);
+
+  useEffect(() => {
+    if (!client) return;
+    let cancelled = false;
+
+    const loadAssignments = async () => {
+      try {
+        const baseFilters = { members: { $in: [user.uid] } };
+        const [individual, group] = await Promise.all([
+          client.queryChannels(
+            { ...baseFilters, type: "messaging" } as ChannelFilters,
+            sort,
+            { message_limit: 30, state: true, watch: true },
+          ),
+          client.queryChannels(
+            { ...baseFilters, type: "livestream" } as ChannelFilters,
+            sort,
+            { message_limit: 30, state: true, watch: true },
+          ),
+        ]);
+        if (!cancelled) {
+          setAssignmentChannels([...individual, ...group]);
+          setChannelError("");
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setChannelError(
+            error instanceof Error ? error.message : "Unable to load assignments",
+          );
+        }
+      }
+    };
+
+    void loadAssignments();
+    const subscription = client.on("channel.updated", () => {
+      setAssignmentChannels((current) => [...current]);
+    });
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, [client, sort, user.uid]);
 
   if (!client) return <LoadingStreaks />;
 
@@ -62,6 +113,7 @@ function AuthenticatedStreakPage({
             </p>
           </div>
           <PriorityAssignmentList
+            channels={assignmentChannels}
             enabled
             filters={filters}
             onDailyMinutesChange={onDailyMinutesChange}
@@ -71,6 +123,11 @@ function AuthenticatedStreakPage({
         </div>
 
         <div className="chat-panel min-w-0 flex-1 bg-white max-md:h-[38rem]">
+          {channelError && (
+            <p className="border-b-2 border-red-600 bg-red-50 px-4 py-2 text-sm text-red-700" role="alert">
+              {channelError}
+            </p>
+          )}
           <Channel>
             <ChannelContent
               user={user}
