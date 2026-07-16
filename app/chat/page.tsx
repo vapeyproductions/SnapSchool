@@ -9,7 +9,6 @@ import {
   MessageCircleMore,
   Plus,
   School,
-  Sparkles,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useContext, useState } from "react";
@@ -163,6 +162,7 @@ export default function ChatPage() {
         </section>
 
         <section className="social-workspace overflow-hidden border-2 border-black bg-white shadow-[7px_7px_0_#111]">
+          {(isAdministrator || view === "groups") && (
           <div className="flex flex-col gap-3 border-b-2 border-black bg-[#f4f0e8] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
             <div className="flex items-center gap-3">
               <span className="flex size-9 items-center justify-center rounded-full bg-black text-white">
@@ -200,12 +200,9 @@ export default function ChatPage() {
                 </DialogTrigger>
                 <CreateGroupModal setOpen={setOpenGroupModal} />
               </Dialog>
-            ) : (
-              <div className="flex items-center gap-2 rounded-full border border-zinc-300 bg-white px-3 py-2 text-xs font-bold text-zinc-600">
-                <Sparkles className="size-4 text-[#7b61ff]" /> AI keeps your plan on pace
-              </div>
-            )}
+            ) : null}
           </div>
+          )}
 
           <div className="p-2 sm:p-4">
             {view === "groups" ? (
