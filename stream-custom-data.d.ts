@@ -16,6 +16,7 @@ declare module "stream-chat" {
       | "reading"
       | "test";
     assignment_summary?: string;
+    amended_due_date?: string;
     class_id?: string;
     class_name?: string;
     completed_work_days?: number;
@@ -26,6 +27,8 @@ declare module "stream-chat" {
     last_progress_at?: string;
     last_progress_confidence?: "high" | "medium" | "low";
     last_progress_summary?: string;
+    late_amendment?: boolean;
+    original_due_date?: string;
     recommended_work_days?: number;
     remaining_work_summary?: string;
     student_username?: string;

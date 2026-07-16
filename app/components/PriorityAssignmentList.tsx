@@ -127,7 +127,9 @@ export function PriorityAssignmentList({
           channel.data?.name ||
           "Assignment";
         const urgencyLabel =
-          priority.daysUntilDue !== null && priority.daysUntilDue < 0
+          channel.data?.late_amendment
+            ? "SUPER URGENT"
+            : priority.daysUntilDue !== null && priority.daysUntilDue < 0
             ? "EXTREMELY URGENT"
             : priority.urgency === "critical"
               ? "Do next"

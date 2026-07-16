@@ -3,6 +3,7 @@
 import type { User } from "firebase/auth";
 import {
   AlertTriangle,
+  CalendarClock,
   CalendarDays,
   CheckCircle2,
   ChevronRight,
@@ -21,6 +22,7 @@ import type { Channel as StreamChannel, ChannelFilters, ChannelSort } from "stre
 import { Channel, Chat, MessageComposer, MessageList, Window } from "stream-chat-react";
 
 import {
+  amendStudentAssignmentDueDate,
   deletePublishedAssignment,
   getAdministratorClasses,
   type SchoolClassSummary,
@@ -89,6 +91,25 @@ const formatDueDate = (date?: string) =>
         year: "numeric",
       })
     : "No due date";
+
+const localDateString = () => {
+  const today = new Date();
+  return [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, "0"),
+    String(today.getDate()).padStart(2, "0"),
+  ].join("-");
+};
+
+const isStudentOverdue = (channel: StreamChannel, today = localDateString()) => {
+  const originalDueDate =
+    channel.data?.original_due_date ?? channel.data?.due_date;
+  return Boolean(
+    originalDueDate &&
+      originalDueDate < today &&
+      progressPercent(channel) < 100,
+  );
+};
 
 const studentName = (channel: StreamChannel) =>
   channel.data?.student_username ||
@@ -263,6 +284,90 @@ function AssignmentManagement({
   );
 }
 
+function StudentDueDateAmendment({
+  channel,
+  onAmended,
+  user,
+}: {
+  channel: StreamChannel;
+  onAmended: (channelCid: string, originalDueDate: string, dueDate: string) => void;
+  user: User;
+}) {
+  const [open, setOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const originalDueDate =
+    channel.data?.original_due_date ?? channel.data?.due_date;
+  const amendedDueDate = channel.data?.amended_due_date;
+
+  const amendDueDate = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setErrorMessage("");
+    setIsSaving(true);
+    const formData = new FormData(event.currentTarget);
+    const dueDate = String(formData.get("amendedDueDate") ?? "");
+
+    try {
+      const result = await amendStudentAssignmentDueDate({
+        channelCid: channel.cid,
+        dueDate,
+        firebaseIdToken: await user.getIdToken(),
+      });
+      if (!result.success || !result.originalDueDate || !result.amendedDueDate) {
+        setErrorMessage(result.error ?? "Unable to amend the due date");
+        return;
+      }
+      onAmended(channel.cid, result.originalDueDate, result.amendedDueDate);
+      setOpen(false);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Unable to amend the due date");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 rounded-xl border-2 border-red-200 bg-red-50 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-xs font-black uppercase tracking-wider text-red-800">Late assignment</p>
+          <p className="mt-1 text-xs text-red-700">
+            Original due date: {formatDueDate(originalDueDate)}
+            {amendedDueDate && ` · Amended due: ${formatDueDate(amendedDueDate)}`}
+          </p>
+        </div>
+        <Dialog open={open} onOpenChange={(nextOpen) => { setOpen(nextOpen); setErrorMessage(""); }}>
+          <DialogTrigger render={<Button className="rounded-full border-2 border-red-700 bg-white px-3 text-xs font-black text-red-700 hover:bg-red-100" />}>
+            <CalendarClock className="size-4" /> {amendedDueDate ? "Change amendment" : "Amend due date"}
+          </DialogTrigger>
+          <DialogContent className="rounded-2xl sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Amend {studentName(channel)}&apos;s due date</DialogTitle>
+              <DialogDescription>
+                The original deadline remains recorded. This assignment will stay super urgent for the student until it reaches 100% completion.
+              </DialogDescription>
+            </DialogHeader>
+            <form className="space-y-4" onSubmit={amendDueDate}>
+              <div className="rounded-xl bg-red-50 p-3 text-sm text-red-800">
+                Original due date: <strong>{formatDueDate(originalDueDate)}</strong>
+              </div>
+              <label className="block space-y-2 text-sm font-medium">
+                Amended due date
+                <input className="w-full rounded-xl border border-slate-300 px-3 py-2.5" defaultValue={amendedDueDate} min={localDateString()} name="amendedDueDate" required type="date" />
+              </label>
+              {errorMessage && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700" role="alert">{errorMessage}</p>}
+              <Button className="w-full rounded-xl bg-red-700 font-black text-white hover:bg-red-800" disabled={isSaving} type="submit">
+                {isSaving && <Loader2 className="size-4 animate-spin" />}
+                {isSaving ? "Saving amendment…" : "Save amended due date"}
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </div>
+  );
+}
+
 function LoadingDashboard() {
   return (
     <div className="flex min-h-[36rem] items-center justify-center gap-2 text-sm font-semibold text-zinc-500">
@@ -352,7 +457,7 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
       .filter((channel) => channel.data?.class_id === selectedClassId)
       .forEach((channel) => {
         const title = channel.data?.assignment_title || channel.data?.name || "Assignment";
-        const dueDate = channel.data?.due_date;
+        const dueDate = channel.data?.original_due_date ?? channel.data?.due_date;
         const kind = channel.data?.assignment_kind || "assignment";
         const key = `${title}:${dueDate ?? "none"}:${kind}`;
         const existing = groups.get(key);
@@ -394,37 +499,27 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
   const noProgressStudents =
     selectedAssignment?.channels.filter((channel) => progressPercent(channel) === 0)
       .length ?? 0;
-  const today = new Date();
-  const todayString = [
-    today.getFullYear(),
-    String(today.getMonth() + 1).padStart(2, "0"),
-    String(today.getDate()).padStart(2, "0"),
-  ].join("-");
+  const todayString = localDateString();
   const assignmentIsOverdue = Boolean(
     selectedAssignment?.dueDate && selectedAssignment.dueDate < todayString,
   );
-  const overdueStudents = assignmentIsOverdue
-    ? selectedAssignment?.channels.filter(
-        (channel) => progressPercent(channel) < 100,
-      ).length ?? 0
-    : 0;
-  const messageThreads = useMemo(
-    () =>
-      (selectedAssignment?.channels ?? [])
-        .map((channel) => ({
-          channel,
-          message: [...channel.state.messages]
-            .reverse()
-            .find((message) => isStudentMessage(channel, message)),
-        }))
-        .filter((thread) => Boolean(thread.message))
-        .sort(
-          (first, second) =>
-            new Date(second.message?.created_at ?? 0).getTime() -
-            new Date(first.message?.created_at ?? 0).getTime(),
-        ),
-    [selectedAssignment],
-  );
+  const overdueStudents =
+    selectedAssignment?.channels.filter((channel) =>
+      isStudentOverdue(channel, todayString),
+    ).length ?? 0;
+  const messageThreads = (selectedAssignment?.channels ?? [])
+    .map((channel) => ({
+      channel,
+      message: [...channel.state.messages]
+        .reverse()
+        .find((message) => isStudentMessage(channel, message)),
+    }))
+    .filter((thread) => Boolean(thread.message))
+    .sort(
+      (first, second) =>
+        new Date(second.message?.created_at ?? 0).getTime() -
+        new Date(first.message?.created_at ?? 0).getTime(),
+    );
   const replyChannel = selectedAssignment?.channels.find(
     (channel) => channel.cid === replyChannelCid,
   );
@@ -588,7 +683,9 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
                               assignment_kind: update.assignmentKind,
                               assignment_summary: update.assignmentSummary,
                               assignment_title: update.title,
-                              due_date: update.dueDate,
+                              due_date: channel.data?.late_amendment
+                                ? channel.data.due_date
+                                : update.dueDate,
                               name: channel.data?.student_username
                                 ? `${update.title} · ${channel.data.student_username}`
                                 : update.title,
@@ -729,7 +826,13 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
                 <section className="grid gap-3 p-4">
                   {selectedAssignment.channels
                     .slice()
-                    .sort((first, second) => progressPercent(first) - progressPercent(second))
+                    .sort((first, second) => {
+                      const overdueOrder =
+                        Number(isStudentOverdue(second, todayString)) -
+                        Number(isStudentOverdue(first, todayString));
+                      if (overdueOrder !== 0) return overdueOrder;
+                      return progressPercent(first) - progressPercent(second);
+                    })
                     .map((channel) => {
                       const completedDays = channel.data?.completed_work_days ?? 0;
                       const targetDays = channel.data?.recommended_work_days ?? 0;
@@ -740,14 +843,18 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
                           : [],
                       );
                       const percent = progressPercent(channel);
+                      const urgent = isStudentOverdue(channel, todayString);
 
                       return (
-                        <details className="group rounded-2xl border-2 border-black bg-white shadow-[3px_3px_0_#111]" key={channel.cid}>
+                        <details className={`group rounded-2xl border-2 bg-white shadow-[3px_3px_0_#111] ${urgent ? "border-red-700" : "border-black"}`} key={channel.cid}>
                           <summary className="flex cursor-pointer list-none items-center gap-3 p-4">
                             <CircleUserRound className="size-8 shrink-0" />
                             <span className="min-w-0 flex-1">
-                              <strong className="block truncate capitalize">{studentName(channel)}</strong>
-                              <span className="mt-1 block h-2 overflow-hidden rounded-full bg-zinc-200"><span className="block h-full bg-[#7b61ff]" style={{ width: `${percent}%` }} /></span>
+                              <span className="flex flex-wrap items-center gap-2">
+                                <strong className="truncate capitalize">{studentName(channel)}</strong>
+                                {urgent && <span className="rounded-full bg-red-700 px-2 py-0.5 text-[10px] font-black tracking-wider text-white">URGENT</span>}
+                              </span>
+                              <span className="mt-1 block h-2 overflow-hidden rounded-full bg-zinc-200"><span className={`block h-full ${urgent ? "bg-red-600" : "bg-[#7b61ff]"}`} style={{ width: `${percent}%` }} /></span>
                             </span>
                             <span className="shrink-0 text-right"><strong className="block">{percent}%</strong><span className="text-[10px] text-zinc-500">{completedDays}/{targetDays} steps</span></span>
                             <ChevronRight className="size-4 transition group-open:rotate-90" />
@@ -757,6 +864,27 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
                               <p className="text-xs font-black uppercase tracking-wider">Progress so far</p>
                               <p className="mt-2 text-sm leading-6 text-zinc-700">{channel.data?.last_progress_summary || "No reviewed progress has been submitted yet."}</p>
                               {channel.data?.remaining_work_summary && <p className="mt-2 rounded-xl bg-white p-3 text-xs leading-5"><strong>Still to do:</strong> {channel.data.remaining_work_summary}</p>}
+                              {urgent && channel.data?.student_username && (
+                                <StudentDueDateAmendment
+                                  channel={channel}
+                                  onAmended={(channelCid, originalDueDate, dueDate) => {
+                                    setChannels((current) =>
+                                      current.map((item) => {
+                                        if (item.cid !== channelCid) return item;
+                                        item.data = {
+                                          ...item.data,
+                                          amended_due_date: dueDate,
+                                          due_date: dueDate,
+                                          late_amendment: true,
+                                          original_due_date: originalDueDate,
+                                        };
+                                        return item;
+                                      }),
+                                    );
+                                  }}
+                                  user={user}
+                                />
+                              )}
                               {plan.length > 0 && (
                                 <div className="mt-3 grid gap-1.5 text-xs">
                                   {plan.map((task, index) => (

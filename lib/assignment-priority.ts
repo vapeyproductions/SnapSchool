@@ -1,10 +1,13 @@
 type AssignmentChannelData = {
+  amended_due_date?: string;
   class_id?: string;
   class_name?: string;
   completed_work_days?: number;
   due_date?: string;
   estimated_total_minutes?: number;
   last_progress_at?: string;
+  late_amendment?: boolean;
+  original_due_date?: string;
   recommended_work_days?: number;
 };
 
@@ -73,6 +76,7 @@ export const getAssignmentPriority = (
   const minutesPerAvailableDay = remainingMinutes / availableDays;
 
   let score = minutesPerAvailableDay;
+  if (data.late_amendment && !completed) score += 2_000_000;
   if (daysUntilDue !== null) {
     if (daysUntilDue < 0) score += 1_000_000 + Math.abs(daysUntilDue) * 10_000;
     else if (daysUntilDue === 0) score += 500_000;
@@ -82,6 +86,7 @@ export const getAssignmentPriority = (
 
   let urgency: AssignmentPriority["urgency"] = "normal";
   if (completed) urgency = "complete";
+  else if (data.late_amendment) urgency = "critical";
   else if (daysUntilDue !== null && daysUntilDue <= 0) urgency = "critical";
   else if (
     (daysUntilDue !== null && daysUntilDue <= 1) ||
@@ -104,7 +109,7 @@ export const getAssignmentPriority = (
       ? "missed"
       : "active";
 
-  const dueLabel = daysUntilDue === null
+  const baseDueLabel = daysUntilDue === null
     ? "No due date"
     : daysUntilDue < 0
       ? `${Math.abs(daysUntilDue)}d overdue`
@@ -113,6 +118,9 @@ export const getAssignmentPriority = (
         : daysUntilDue === 1
           ? "Due tomorrow"
           : `Due in ${daysUntilDue}d`;
+  const dueLabel = data.late_amendment
+    ? `Late amendment · ${baseDueLabel}`
+    : baseDueLabel;
 
   return {
     classLabel: data.class_name || "Individual",

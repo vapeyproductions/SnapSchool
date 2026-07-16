@@ -958,13 +958,14 @@ const loadAuthorizedAssignmentChannels = async (
   );
   const first = channels[0].data;
   const classId = first.class_id;
+  const originalDueDate = first.original_due_date ?? first.due_date;
 
   if (
     channels.some(
       ({ data }) =>
         data.class_id !== classId ||
         data.assignment_title !== first.assignment_title ||
-        data.due_date !== first.due_date ||
+        (data.original_due_date ?? data.due_date) !== originalDueDate ||
         data.assignment_kind !== first.assignment_kind,
     )
   ) {
@@ -1025,6 +1026,16 @@ export const updatePublishedAssignment = async (data: {
       data.firebaseIdToken,
       data.channelCids,
     );
+    const sharedOriginalDueDate =
+      channels[0].data.original_due_date ?? channels[0].data.due_date;
+    if (
+      channels.some(({ data: channelData }) => channelData.late_amendment) &&
+      data.dueDate !== sharedOriginalDueDate
+    ) {
+      throw new Error(
+        "This assignment has individual late amendments. Change those students' amended dates from Student progress.",
+      );
+    }
     await Promise.all(
       channels.map(({ channel, data: channelData }) =>
         channel.updatePartial({
@@ -1032,7 +1043,9 @@ export const updatePublishedAssignment = async (data: {
             assignment_kind: data.assignmentKind,
             assignment_summary: assignmentSummary,
             assignment_title: title,
-            due_date: data.dueDate,
+            due_date: channelData.late_amendment
+              ? channelData.due_date
+              : data.dueDate,
             name: channelData.student_username
               ? `${title} · ${channelData.student_username}`
               : title,
@@ -1067,6 +1080,64 @@ export const deletePublishedAssignment = async (data: {
     return {
       deletedCount: 0,
       error: error instanceof Error ? error.message : "Unable to delete the assignment",
+      success: false,
+    };
+  }
+};
+
+export const amendStudentAssignmentDueDate = async (data: {
+  channelCid: string;
+  dueDate: string;
+  firebaseIdToken: string;
+}) => {
+  try {
+    if (!isISODate(data.dueDate)) {
+      throw new Error("Choose a valid amended due date");
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    if (data.dueDate < today) {
+      throw new Error("The amended due date must be today or later");
+    }
+
+    const [{ channel, data: channelData }] =
+      await loadAuthorizedAssignmentChannels(data.firebaseIdToken, [data.channelCid]);
+    if (!channelData.student_username) {
+      throw new Error("Individual due-date amendments are only available for student assignments");
+    }
+
+    const originalDueDate = channelData.original_due_date ?? channelData.due_date;
+    if (typeof originalDueDate !== "string" || originalDueDate >= today) {
+      throw new Error("A due date becomes amendable on the day after it was due");
+    }
+    const completed =
+      (channelData.recommended_work_days ?? 0) > 0 &&
+      (channelData.completed_work_days ?? 0) >=
+        (channelData.recommended_work_days ?? 0);
+    if (completed) {
+      throw new Error("This student has already completed the assignment");
+    }
+
+    await channel.updatePartial({
+      set: {
+        amended_due_date: data.dueDate,
+        due_date: data.dueDate,
+        late_amendment: true,
+        original_due_date: originalDueDate,
+      },
+    });
+
+    return {
+      amendedDueDate: data.dueDate,
+      error: null,
+      originalDueDate,
+      success: true,
+    };
+  } catch (error) {
+    return {
+      amendedDueDate: null,
+      error: error instanceof Error ? error.message : "Unable to amend the due date",
+      originalDueDate: null,
       success: false,
     };
   }

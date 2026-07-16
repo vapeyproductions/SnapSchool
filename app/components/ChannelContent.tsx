@@ -240,7 +240,8 @@ export function ChannelContent({
               <p className="mt-0.5 text-xs font-medium text-zinc-300">
                 {channel.data?.class_name || "Individual assignment"}
                 {dueDate &&
-                  ` · Due ${new Date(`${dueDate}T00:00:00`).toLocaleDateString()}`}
+                  ` · ${channel.data?.late_amendment ? "Amended due" : "Due"} ${new Date(`${dueDate}T00:00:00`).toLocaleDateString()}`}
+                {channel.data?.late_amendment && " · SUPER URGENT (late)"}
               </p>
             </div>
 
