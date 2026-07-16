@@ -17,6 +17,7 @@ import type { ChannelMemberResponse } from "stream-chat";
 import db, { auth } from "./firebase";
 
 export type AccountRole = "student" | "administrator" | "parent";
+export type StudentMode = "independent" | "school";
 
 export const registerUser = async (form: FormData) => {
   let createdUser: typeof auth.currentUser = null;
@@ -30,6 +31,7 @@ export const registerUser = async (form: FormData) => {
       .trim()
       .toLowerCase();
     const roleValue = form.get("role");
+    const studentModeValue = form.get("studentMode");
     const imageBaseUrl = process.env.NEXT_PUBLIC_IMAGE_URL;
 
     if (!email || !password || !username) {
@@ -55,6 +57,14 @@ export const registerUser = async (form: FormData) => {
     }
 
     const role: AccountRole = roleValue;
+    const studentMode: StudentMode | null = role === "student"
+      ? studentModeValue === "independent" || studentModeValue === "school"
+        ? studentModeValue
+        : null
+      : null;
+    if (role === "student" && !studentMode) {
+      throw new Error("Choose whether this student is school-connected or independent");
+    }
     const photoURL = `${imageBaseUrl}${encodeURIComponent(username)}`;
     const userRef = doc(db, "users", username);
 
@@ -79,20 +89,19 @@ export const registerUser = async (form: FormData) => {
         throw new Error("That username is already taken");
       }
 
-      transaction.set(userRef, {
+      const profileData = {
         uid: user.uid,
         username,
         email: user.email,
         photoURL,
         role,
+        ...(studentMode ? { studentMode } : {}),
         createdAt: serverTimestamp(),
-      });
+      };
+      transaction.set(userRef, profileData);
       transaction.set(doc(db, "profiles", user.uid), {
-        uid: user.uid,
-        username,
-        photoURL,
-        role,
-        createdAt: serverTimestamp(),
+        ...profileData,
+        email: null,
       });
     });
 
@@ -227,6 +236,14 @@ export const changeUsername = async (newUsernameValue: string) => {
           ...currentProfile.data(),
           username: newUsername,
           photoURL,
+          ...(currentProfile.data().role === "student"
+            ? {
+                studentMode:
+                  currentProfile.data().studentMode === "independent"
+                    ? "independent"
+                    : "school",
+              }
+            : {}),
           updatedAt: serverTimestamp(),
         };
         transaction.set(nextRef, updatedProfile);
@@ -235,6 +252,14 @@ export const changeUsername = async (newUsernameValue: string) => {
           username: newUsername,
           photoURL,
           role: currentProfile.data().role,
+          ...(currentProfile.data().role === "student"
+            ? {
+                studentMode:
+                  currentProfile.data().studentMode === "independent"
+                    ? "independent"
+                    : "school",
+              }
+            : {}),
           createdAt: currentProfile.data().createdAt ?? serverTimestamp(),
           updatedAt: serverTimestamp(),
         }, { merge: true });

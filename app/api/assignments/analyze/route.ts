@@ -20,7 +20,10 @@ type FirebaseAccount = { displayName?: string; localId?: string };
 const errorResponse = (message: string, status: number) =>
   Response.json({ error: message }, { status });
 
-const requireAdministrator = async (idToken: string) => {
+const requireAssignmentPlanner = async (
+  idToken: string,
+  targetStudentUid: string,
+) => {
   const firebaseApiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
   const firebaseProjectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
 
@@ -45,21 +48,69 @@ const requireAdministrator = async (idToken: string) => {
     throw new Error("Your session is invalid or has expired. Sign in again.");
   }
 
-  const profileResponse = await fetch(
+  let profileResponse = await fetch(
     `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}` +
-      `/databases/(default)/documents/users/${encodeURIComponent(username)}`,
+      `/databases/(default)/documents/profiles/${encodeURIComponent(account.localId)}`,
     { cache: "no-store", headers: { Authorization: `Bearer ${idToken}` } },
   );
+  if (!profileResponse.ok) {
+    profileResponse = await fetch(
+      `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}` +
+        `/databases/(default)/documents/users/${encodeURIComponent(username)}`,
+      { cache: "no-store", headers: { Authorization: `Bearer ${idToken}` } },
+    );
+  }
   const profile = (await profileResponse.json()) as {
     fields?: Record<string, { stringValue?: string }>;
   };
+  const role = profile.fields?.role?.stringValue;
+  const studentMode = profile.fields?.studentMode?.stringValue;
 
+  if (!profileResponse.ok || profile.fields?.uid?.stringValue !== account.localId) {
+    throw new Error("Your SnapSchool profile could not be verified");
+  }
+  if (role === "administrator") return account.localId;
+  if (role === "student") {
+    if (studentMode !== "independent" || (targetStudentUid && targetStudentUid !== account.localId)) {
+      throw new Error("School-connected students receive assignments from their administrators");
+    }
+    return account.localId;
+  }
+  if (role !== "parent" || !targetStudentUid) {
+    throw new Error("This account cannot analyze independent assignments");
+  }
+
+  const studentResponse = await fetch(
+    `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}` +
+      `/databases/(default)/documents/profiles/${encodeURIComponent(targetStudentUid)}`,
+    { cache: "no-store", headers: { Authorization: `Bearer ${idToken}` } },
+  );
+  const studentProfile = (await studentResponse.json()) as {
+    fields?: Record<string, { stringValue?: string }>;
+  };
   if (
-    !profileResponse.ok ||
-    profile.fields?.uid?.stringValue !== account.localId ||
-    profile.fields?.role?.stringValue !== "administrator"
+    !studentResponse.ok ||
+    studentProfile.fields?.role?.stringValue !== "student" ||
+    studentProfile.fields?.studentMode?.stringValue !== "independent"
   ) {
-    throw new Error("Only administrators can analyze assignments");
+    throw new Error("Parents can only plan work for an approved independent student");
+  }
+  const connectionId = `${account.localId}_${targetStudentUid}`;
+  const connectionResponse = await fetch(
+    `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}` +
+      `/databases/(default)/documents/familyConnections/${encodeURIComponent(connectionId)}`,
+    { cache: "no-store", headers: { Authorization: `Bearer ${idToken}` } },
+  );
+  const connection = (await connectionResponse.json()) as {
+    fields?: Record<string, { stringValue?: string }>;
+  };
+  if (
+    !connectionResponse.ok ||
+    connection.fields?.parentUid?.stringValue !== account.localId ||
+    connection.fields?.studentUid?.stringValue !== targetStudentUid ||
+    connection.fields?.status?.stringValue !== "approved"
+  ) {
+    throw new Error("The student must approve parent access before you can plan assignments");
   }
 
   return account.localId;
@@ -113,7 +164,9 @@ export async function POST(request: Request) {
     const idToken = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
     if (!idToken) return errorResponse("You must be signed in", 401);
 
-    const administratorId = await requireAdministrator(idToken);
+    const formData = await request.formData();
+    const targetStudentUid = String(formData.get("targetStudentUid") ?? "").trim();
+    const plannerId = await requireAssignmentPlanner(idToken, targetStudentUid);
     const openAIKey = process.env.OPENAI_API_KEY;
     if (!openAIKey) {
       return errorResponse(
@@ -122,7 +175,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const formData = await request.formData();
     const description = String(formData.get("description") ?? "").trim();
     const teacherDueDate = String(formData.get("dueDate") ?? "").trim();
     const groupWorkerCountRaw = String(formData.get("groupWorkerCount") ?? "").trim();
@@ -146,8 +198,8 @@ export async function POST(request: Request) {
 
     const content: Array<Record<string, unknown>> = [{
       text:
-        `Analyze this school assignment for a teacher. Today is ${new Date().toISOString().slice(0, 10)}.\n` +
-        `Teacher-provided due date: ${teacherDueDate || "none"}. A teacher-provided date overrides any date found in the source.\n` +
+        `Analyze this school assignment for the person organizing it. Today is ${new Date().toISOString().slice(0, 10)}.\n` +
+        `Provided due date: ${teacherDueDate || "none"}. A provided date overrides any date found in the source.\n` +
         `This plan will be shared once across ${groupCount} group${groupCount === 1 ? "" : "s"}. The smallest group has ${groupWorkerCount} student workers, so make every step achievable by that group size.\n` +
         `Teacher description: ${description || "none"}.\n\n` +
         "Extract a concise title and the actual deliverables. Estimate realistic student work time. " +
@@ -162,7 +214,7 @@ export async function POST(request: Request) {
         "Use early sessions for focused topic review, middle sessions for retrieval and targeted practice, and the final session for cumulative mixed practice and a readiness check rather than substantial new material. " +
         "Never use a vague task such as 'study for the test.' If the tested topics are not provided, do not invent them; create clearly labeled review categories from the available source and add a warning asking the teacher to confirm coverage. " +
         "If the source is unreadable, unrelated, or lacks enough assignment information, set inputValid false and explain why in warnings. " +
-        "This is a planning recommendation that a teacher will review, not a final educational judgment.",
+        "This is a planning recommendation that the person adding the assignment will review, not a final educational judgment.",
       type: "input_text",
     }];
 
@@ -176,12 +228,12 @@ export async function POST(request: Request) {
     const openAIResponse = await fetch("https://api.openai.com/v1/responses", {
       body: JSON.stringify({
         instructions:
-          "You are an educational workload and study-plan designer. Produce concrete, age-appropriate daily actions grounded only in the teacher's source. Distinguish preparation for an assessment from production work, and follow every assessment-specific planning rule in the user request.",
+          "You are an educational workload and study-plan designer. Produce concrete, age-appropriate daily actions grounded only in the provided assignment source. Distinguish preparation for an assessment from production work, and follow every assessment-specific planning rule in the user request.",
         input: [{ content, role: "user" }],
         max_output_tokens: 3000,
         model: "gpt-5.6",
         reasoning: { effort: "medium" },
-        safety_identifier: createHash("sha256").update(administratorId).digest("hex"),
+        safety_identifier: createHash("sha256").update(plannerId).digest("hex"),
         store: false,
         text: { format: { name: "assignment_analysis", schema: assignmentSchema, strict: true, type: "json_schema" } },
       }),
@@ -202,7 +254,7 @@ export async function POST(request: Request) {
     return Response.json({ analysis: parseAssignmentAnalysis(JSON.parse(outputContent.text)) });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to analyze assignment";
-    const status = /session|signed in/i.test(message) ? 401 : /administrators/i.test(message) ? 403 : 500;
+    const status = /session|signed in/i.test(message) ? 401 : /cannot|only|approve|school-connected/i.test(message) ? 403 : 500;
     return errorResponse(message, status);
   }
 }

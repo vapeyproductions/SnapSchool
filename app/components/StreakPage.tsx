@@ -90,12 +90,16 @@ function AuthenticatedStreakPage({
     };
 
     void loadAssignments();
-    const subscription = client.on("channel.updated", () => {
+    const updateSubscription = client.on("channel.updated", () => {
       setAssignmentChannels((current) => [...current]);
+    });
+    const addedSubscription = client.on("notification.added_to_channel", () => {
+      void loadAssignments();
     });
     return () => {
       cancelled = true;
-      subscription.unsubscribe();
+      updateSubscription.unsubscribe();
+      addedSubscription.unsubscribe();
     };
   }, [client, sort, user.uid]);
 

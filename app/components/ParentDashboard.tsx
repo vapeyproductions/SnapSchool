@@ -52,6 +52,12 @@ export default function ParentDashboard({ user }: { user: User }) {
     return () => { active = false; };
   }, [user]);
 
+  useEffect(() => {
+    const refreshAfterCreation = () => { void loadDashboard(); };
+    window.addEventListener("snapschool:assignment-created", refreshAfterCreation);
+    return () => window.removeEventListener("snapschool:assignment-created", refreshAfterCreation);
+  });
+
   if (isLoading) {
     return <div className="flex min-h-[34rem] items-center justify-center gap-2 text-sm font-semibold text-zinc-500"><Loader2 className="size-5 animate-spin" /> Loading family progress…</div>;
   }

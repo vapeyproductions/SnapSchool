@@ -10,6 +10,11 @@ service cloud.firestore {
       return data.role == 'student' || data.role == 'administrator' || data.role == 'parent';
     }
 
+    function validStudentMode(data) {
+      return data.role != 'student'
+        || data.studentMode in ['school', 'independent'];
+    }
+
     match /users/{username} {
       // Signed-in users need to resolve one another by username when an
       // administrator creates an assignment.
@@ -21,7 +26,8 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.username == username
-        && validRole(request.resource.data);
+        && validRole(request.resource.data)
+        && validStudentMode(request.resource.data);
 
       // Account owners may edit their profile later, but cannot change the
       // identity, username, or role that authorization depends on.
@@ -29,7 +35,13 @@ service cloud.firestore {
         && resource.data.uid == request.auth.uid
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.username == resource.data.username
-        && request.resource.data.role == resource.data.role;
+        && request.resource.data.role == resource.data.role
+        && (
+          request.resource.data.studentMode == resource.data.studentMode
+          || (resource.data.role == 'student'
+            && !('studentMode' in resource.data)
+            && request.resource.data.studentMode == 'school')
+        );
 
       allow delete: if signedIn() && resource.data.uid == request.auth.uid;
     }
@@ -42,12 +54,19 @@ service cloud.firestore {
       allow create: if signedIn()
         && uid == request.auth.uid
         && request.resource.data.uid == request.auth.uid
-        && validRole(request.resource.data);
+        && validRole(request.resource.data)
+        && validStudentMode(request.resource.data);
       allow update: if signedIn()
         && uid == request.auth.uid
         && resource.data.uid == request.auth.uid
         && request.resource.data.uid == resource.data.uid
-        && request.resource.data.role == resource.data.role;
+        && request.resource.data.role == resource.data.role
+        && (
+          request.resource.data.studentMode == resource.data.studentMode
+          || (resource.data.role == 'student'
+            && !('studentMode' in resource.data)
+            && request.resource.data.studentMode == 'school')
+        );
       allow delete: if false;
     }
 

@@ -36,6 +36,7 @@ type VerifiedFirebaseAccount = {
 
 type UserProfile = {
   role: AccountRole;
+  studentMode?: "independent" | "school";
   uid: string;
   username: string;
 };
@@ -107,6 +108,7 @@ const getProfile = async (
   };
   const uid = document.fields?.uid?.stringValue;
   const role = document.fields?.role?.stringValue;
+  const studentModeValue = document.fields?.studentMode?.stringValue;
 
   if (
     !uid ||
@@ -115,7 +117,17 @@ const getProfile = async (
     throw new Error(`The user "${normalizedUsername}" has an invalid profile`);
   }
 
-  return { role, uid, username: normalizedUsername };
+  return {
+    role,
+    studentMode:
+      role === "student" && studentModeValue === "independent"
+        ? "independent"
+        : role === "student"
+          ? "school"
+          : undefined,
+    uid,
+    username: normalizedUsername,
+  };
 };
 
 const getProfileByUid = async (
@@ -140,12 +152,23 @@ const getProfileByUid = async (
     const profileUid = document.fields?.uid?.stringValue;
     const username = document.fields?.username?.stringValue;
     const role = document.fields?.role?.stringValue;
+    const studentModeValue = document.fields?.studentMode?.stringValue;
     if (
       profileUid === uid &&
       username &&
       (role === "student" || role === "administrator" || role === "parent")
     ) {
-      return { role, uid, username };
+      return {
+        role,
+        studentMode:
+          role === "student" && studentModeValue === "independent"
+            ? "independent"
+            : role === "student"
+              ? "school"
+              : undefined,
+        uid,
+        username,
+      };
     }
   }
 
@@ -512,6 +535,16 @@ export const createSchoolClass = async (data: {
         success: false,
       };
     }
+    const independentStudent = students.find(
+      (profile) => profile.studentMode === "independent",
+    );
+    if (independentStudent) {
+      return {
+        classRecord: null,
+        error: `The independent account "${independentStudent.username}" cannot be added to a school class`,
+        success: false,
+      };
+    }
 
     const classId = `class-${crypto.randomUUID().replaceAll("-", "")}`;
     const { firebaseProjectId } = requireServerConfig();
@@ -642,6 +675,16 @@ export const updateSchoolClassRoster = async (data: {
       return {
         classRecord: null,
         error: `The account "${nonStudent.username}" is not a student`,
+        success: false,
+      };
+    }
+    const independentStudent = students.find(
+      (profile) => profile.studentMode === "independent",
+    );
+    if (independentStudent) {
+      return {
+        classRecord: null,
+        error: `The independent account "${independentStudent.username}" cannot be added to a school class`,
         success: false,
       };
     }
@@ -819,6 +862,109 @@ export const createClassAssignment = async (data: {
         error instanceof Error
           ? error.message
           : "Unable to assign work to the class",
+      success: false,
+    };
+  }
+};
+
+export const createIndependentAssignment = async (data: {
+  firebaseIdToken: string;
+  plan: AssignmentPlan;
+  requestId: string;
+  targetStudentUid: string;
+  title: string;
+}) => {
+  try {
+    const creator = await authenticateCaller(data.firebaseIdToken);
+    const student = creator.role === "student"
+      ? creator
+      : await getProfileByUid(data.firebaseIdToken, data.targetStudentUid);
+
+    if (student.role !== "student" || student.studentMode !== "independent") {
+      throw new Error("Independent assignments can only be added to independent student accounts");
+    }
+    if (creator.role === "student" && creator.uid !== student.uid) {
+      throw new Error("Students can only create assignments for themselves");
+    }
+    if (creator.role === "administrator") {
+      throw new Error("Administrators must publish assignments through a class");
+    }
+    if (creator.role === "parent") {
+      const { firebaseProjectId } = requireServerConfig();
+      const connectionId = `${creator.uid}_${student.uid}`;
+      const connectionResponse = await fetch(
+        `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}` +
+          `/databases/(default)/documents/familyConnections/${encodeURIComponent(connectionId)}`,
+        {
+          cache: "no-store",
+          headers: { Authorization: `Bearer ${data.firebaseIdToken}` },
+        },
+      );
+      const connection = connectionResponse.ok
+        ? ((await connectionResponse.json()) as FirestoreDocument)
+        : null;
+      if (
+        !connection ||
+        connection.fields?.parentUid?.stringValue !== creator.uid ||
+        connection.fields?.studentUid?.stringValue !== student.uid ||
+        connection.fields?.status?.stringValue !== "approved"
+      ) {
+        throw new Error("The student must approve parent access before you can add assignments");
+      }
+    }
+
+    // A school-linked Stream assignment is an additional safety check in case
+    // an older profile was incorrectly marked independent.
+    const [schoolMessaging, schoolGroups] = await Promise.all([
+      serverClient.queryChannels(
+        { members: { $in: [student.uid] }, type: "messaging" },
+        {},
+        { limit: 30, state: false, watch: false },
+      ),
+      serverClient.queryChannels(
+        { members: { $in: [student.uid] }, type: "livestream" },
+        {},
+        { limit: 30, state: false, watch: false },
+      ),
+    ]);
+    if ([...schoolMessaging, ...schoolGroups].some((channel) => channel.data?.class_id)) {
+      throw new Error("This student is connected to a school and cannot create independent assignments");
+    }
+
+    const title = data.title.trim();
+    const planData = validateAssignmentPlan(data.plan);
+    const requestId = data.requestId.replaceAll("-", "").toLowerCase();
+    if (title.length < 3 || title.length > 100) {
+      throw new Error("Assignment titles must be between 3 and 100 characters");
+    }
+    if (!/^[a-f0-9]{32}$/.test(requestId)) {
+      throw new Error("This assignment request is invalid. Close the form and try again.");
+    }
+    const slug = title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 25) || "assignment";
+    const channel = serverClient.channel(
+      "messaging",
+      `independent-${slug}-${requestId.slice(0, 12)}`,
+      {
+        ...planData,
+        assignment_source: "independent",
+        assignment_title: title,
+        assignment_type: "individual",
+        class_name: "Independent study",
+        created_by_id: creator.uid,
+        members: [student.uid],
+        name: `${title} · ${student.username}`,
+        student_username: student.username,
+      },
+    );
+    await channel.create();
+    return { error: null, success: true };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : "Unable to create the independent assignment",
       success: false,
     };
   }

@@ -17,6 +17,7 @@ type FirestoreDocument = {
 
 type Profile = {
   role: AccountRole;
+  studentMode?: "independent" | "school";
   uid: string;
   username: string;
 };
@@ -71,8 +72,19 @@ const parseProfile = (document: FirestoreDocument): Profile | null => {
   const uid = document.fields?.uid?.stringValue;
   const username = document.fields?.username?.stringValue;
   const role = document.fields?.role?.stringValue;
+  const studentModeValue = document.fields?.studentMode?.stringValue;
   if (!uid || !username || (role !== "student" && role !== "administrator" && role !== "parent")) return null;
-  return { role, uid, username };
+  return {
+    role,
+    studentMode:
+      role === "student" && studentModeValue === "independent"
+        ? "independent"
+        : role === "student"
+          ? "school"
+          : undefined,
+    uid,
+    username,
+  };
 };
 
 const getProfileByUsername = async (idToken: string, usernameValue: string) => {
@@ -204,6 +216,41 @@ export const getProfileSettings = async (idToken: string) => {
       connections: [] as FamilyConnection[],
       error: error instanceof Error ? error.message : "Unable to load profile settings",
       profile: null,
+      success: false as const,
+    };
+  }
+};
+
+export const getAssignableIndependentStudents = async (idToken: string) => {
+  try {
+    const caller = await authenticate(idToken);
+    if (caller.role === "student") {
+      if (caller.studentMode !== "independent") {
+        throw new Error("School-connected students receive assignments from their administrators");
+      }
+      return {
+        error: null,
+        students: [{ uid: caller.uid, username: caller.username }],
+        success: true as const,
+      };
+    }
+    if (caller.role !== "parent") {
+      throw new Error("This account cannot create independent assignments");
+    }
+    const connections = (await queryConnections(idToken, "parentUid", caller.uid))
+      .filter((connection) => connection.status === "approved");
+    const students = (await Promise.all(
+      connections.map((connection) =>
+        getProfileByUid(idToken, connection.studentUid, connection.studentUsername),
+      ),
+    ))
+      .filter((student) => student.role === "student" && student.studentMode === "independent")
+      .map((student) => ({ uid: student.uid, username: student.username }));
+    return { error: null, students, success: true as const };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : "Unable to load independent students",
+      students: [] as Array<{ uid: string; username: string }>,
       success: false as const,
     };
   }

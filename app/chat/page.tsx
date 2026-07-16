@@ -10,10 +10,12 @@ import {
   Settings,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useContext, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 
+import { getAssignableIndependentStudents } from "@/actions/profile";
 import AuthContext from "@/app/components/AuthContext";
 import CreateGroupModal from "@/app/components/CreateGroupModal";
+import CreateIndependentAssignmentModal from "@/app/components/CreateIndependentAssignmentModal";
 import CreateStreakModal from "@/app/components/CreateStreakModal";
 import ManageClassesModal from "@/app/components/ManageClassesModal";
 import ProfileSettingsModal from "@/app/components/ProfileSettingsModal";
@@ -25,10 +27,11 @@ import { clearCachedAccountRole } from "@/lib/auth-role-cache";
 import { logoutUser } from "@/lib/server";
 
 export default function ChatPage() {
-  const { role, user } = useContext(AuthContext);
+  const { role, studentMode, user } = useContext(AuthContext);
   const router = useRouter();
   const [openStreakModal, setOpenStreakModal] = useState(false);
   const [openGroupModal, setOpenGroupModal] = useState(false);
+  const [openIndependentModal, setOpenIndependentModal] = useState(false);
   const [openClassesModal, setOpenClassesModal] = useState(false);
   const [openProfileSettings, setOpenProfileSettings] = useState(false);
   const [streakReminder, setStreakReminder] = useState(false);
@@ -36,12 +39,32 @@ export default function ChatPage() {
   const [dailyEstimatedMinutes, setDailyEstimatedMinutes] = useState(0);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
+  const [hasIndependentChild, setHasIndependentChild] = useState(false);
 
   const displayName = user?.displayName || user?.email?.split("@")[0] || "User";
   const isAdministrator = role === "administrator";
   const isParent = role === "parent";
   const isStudent = role === "student";
+  const canCreateIndependentAssignment =
+    (isParent && hasIndependentChild) ||
+    (isStudent && studentMode === "independent");
   const initial = displayName.charAt(0).toUpperCase();
+
+  useEffect(() => {
+    if (!user || !isParent) {
+      return;
+    }
+    let active = true;
+    user.getIdToken()
+      .then((firebaseIdToken) => getAssignableIndependentStudents(firebaseIdToken))
+      .then((result) => {
+        if (active) setHasIndependentChild(result.success && result.students.length > 0);
+      })
+      .catch(() => {
+        if (active) setHasIndependentChild(false);
+      });
+    return () => { active = false; };
+  }, [isParent, user]);
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -143,6 +166,15 @@ export default function ChatPage() {
             </p>
           </div>
 
+          <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+          {canCreateIndependentAssignment && (
+            <Dialog open={openIndependentModal} onOpenChange={setOpenIndependentModal}>
+              <DialogTrigger render={<Button className="h-12 rounded-full border-2 border-black bg-[#c7b7ff] px-5 font-black text-black shadow-[3px_3px_0_#111] hover:bg-[#b7a4ff]" />}>
+                <Plus /> Add assignment
+              </DialogTrigger>
+              <CreateIndependentAssignmentModal setOpen={setOpenIndependentModal} />
+            </Dialog>
+          )}
           {isStudent && (
           <div className="flex items-center gap-3 rounded-[1.75rem] border-2 border-black bg-[#fffc00] px-4 py-3 shadow-[5px_5px_0_#111] sm:min-w-72">
             <div className="flex size-12 shrink-0 items-center justify-center rounded-full border-2 border-black bg-[#ff5b35] text-white">
@@ -162,6 +194,7 @@ export default function ChatPage() {
             </div>
           </div>
           )}
+          </div>
         </section>
 
         <section className="social-workspace overflow-hidden border-2 border-black bg-white shadow-[7px_7px_0_#111]">

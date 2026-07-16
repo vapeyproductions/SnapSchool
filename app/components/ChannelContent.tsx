@@ -95,6 +95,7 @@ export function ChannelContent({
     channel.data?.assignment_kind ?? "",
   );
   const isGroupAssignment = channel.data?.assignment_type === "group";
+  const isIndependentAssignment = channel.data?.assignment_source === "independent";
 
   useEffect(() => {
     if (!channel.cid) return;
@@ -216,6 +217,13 @@ export function ChannelContent({
   ]);
 
   const showReminder = () => {
+    if (isIndependentAssignment) {
+      setReminderMessage(
+        `Keep your ${assignmentTitle} plan moving today.${currentStreak > 0 ? ` Your current streak is ${currentStreak} day${currentStreak === 1 ? "" : "s"}.` : ""}`,
+      );
+      setStreakReminder(true);
+      return;
+    }
     const recipient = otherUsername ?? "your streak partner";
     const streakSummary =
       currentStreak > 0
@@ -276,6 +284,8 @@ export function ChannelContent({
                 <MessageCircleQuestion className="size-4" />
                 {isGroupAssignment
                   ? "Group chat"
+                  : isIndependentAssignment
+                    ? "Notes"
                   : role === "student"
                     ? "Ask teacher"
                     : "Messages"}
@@ -301,7 +311,7 @@ export function ChannelContent({
                 onClick={showReminder}
                 type="button"
               >
-                Streak reminder
+                {isIndependentAssignment ? "Progress reminder" : "Streak reminder"}
               </button>
             </div>
             {syncError && (
@@ -324,6 +334,8 @@ export function ChannelContent({
               {role === "student"
                 ? isGroupAssignment
                   ? "Work together here. Use Request teacher only when the group needs direct help."
+                  : isIndependentAssignment
+                    ? "Keep optional notes about this assignment here. Submit actual progress from the plan tab so AI can update the streak."
                   : "Ask your teacher a question about this assignment. Your conversation stays attached to this work."
                 : "Answer student questions and discuss this assignment here."}
             </div>

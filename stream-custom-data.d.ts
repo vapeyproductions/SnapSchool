@@ -16,6 +16,7 @@ declare module "stream-chat" {
       | "reading"
       | "test";
     assignment_summary?: string;
+    assignment_source?: "independent" | "school";
     amended_due_date?: string;
     class_id?: string;
     class_name?: string;
