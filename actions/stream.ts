@@ -17,6 +17,7 @@ type AssignmentType = "individual" | "group";
 
 type AssignmentChannelArgs = {
   assignmentType: AssignmentType;
+  classId?: string;
   firebaseIdToken: string;
   memberUsernames: string[];
   plan: AssignmentPlan;
@@ -820,6 +821,29 @@ export const createAssignmentChannel = async (
       };
     }
 
+    if (data.assignmentType === "group" && !data.classId) {
+      return {
+        success: false,
+        error: "Select the class this group project belongs to",
+        id: null,
+      };
+    }
+
+    const schoolClass = data.classId
+      ? await getSchoolClass(data.firebaseIdToken, data.classId)
+      : null;
+
+    if (
+      schoolClass &&
+      !schoolClass.administratorIds.includes(creator.uid)
+    ) {
+      return {
+        success: false,
+        error: "You do not have permission to publish work to this class",
+        id: null,
+      };
+    }
+
     const invitedProfiles = await Promise.all(
       usernames.map((username) => getProfile(data.firebaseIdToken, username)),
     );
@@ -846,6 +870,20 @@ export const createAssignmentChannel = async (
       };
     }
 
+    const studentOutsideClass = schoolClass && invitedProfiles.find(
+      (profile) =>
+        profile.role === "student" &&
+        !schoolClass.studentIds.includes(profile.uid),
+    );
+
+    if (studentOutsideClass) {
+      return {
+        success: false,
+        error: `The student "${studentOutsideClass.username}" is not in ${schoolClass.name}`,
+        id: null,
+      };
+    }
+
     const members = [...new Set([
       creator.uid,
       ...invitedProfiles.map((profile) => profile.uid),
@@ -867,6 +905,8 @@ export const createAssignmentChannel = async (
         ...planData,
         assignment_title: title,
         assignment_type: data.assignmentType,
+        class_id: schoolClass?.id,
+        class_name: schoolClass?.name,
         created_by_id: creator.uid,
         members,
         name: title,

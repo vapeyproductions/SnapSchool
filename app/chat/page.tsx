@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { useContext, useState } from "react";
 
 import AuthContext from "@/app/components/AuthContext";
+import CreateGroupModal from "@/app/components/CreateGroupModal";
 import CreateStreakModal from "@/app/components/CreateStreakModal";
 import GroupChatPage from "@/app/components/GroupChatPage";
 import ManageClassesModal from "@/app/components/ManageClassesModal";
@@ -31,6 +32,7 @@ export default function ChatPage() {
   const router = useRouter();
   const [view, setView] = useState<ChatView>("individual");
   const [openStreakModal, setOpenStreakModal] = useState(false);
+  const [openGroupModal, setOpenGroupModal] = useState(false);
   const [openClassesModal, setOpenClassesModal] = useState(false);
   const [streakReminder, setStreakReminder] = useState(false);
   const [reminderMessage, setReminderMessage] = useState("");
@@ -202,6 +204,12 @@ export default function ChatPage() {
                     <Plus /> Post assignment
                   </DialogTrigger>
                   <CreateStreakModal setOpen={setOpenStreakModal} />
+                </Dialog>
+                <Dialog open={openGroupModal} onOpenChange={setOpenGroupModal}>
+                  <DialogTrigger render={<Button className="h-10 rounded-full border-2 border-black bg-[#c7b7ff] px-4 font-black text-black hover:bg-[#b7a4ff]" />}>
+                    <Plus /> Group project
+                  </DialogTrigger>
+                  <CreateGroupModal setOpen={setOpenGroupModal} />
                 </Dialog>
               </div>
             ) : null}

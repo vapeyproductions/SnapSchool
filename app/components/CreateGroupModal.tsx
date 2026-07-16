@@ -1,9 +1,13 @@
 "use client";
 
-import { Loader2, Sparkles } from "lucide-react";
-import { type Dispatch, useContext, useState } from "react";
+import { Loader2, School, Sparkles } from "lucide-react";
+import { type Dispatch, useContext, useEffect, useState } from "react";
 
-import { createAssignmentChannel } from "@/actions/stream";
+import {
+  createAssignmentChannel,
+  getAdministratorClasses,
+  type SchoolClassSummary,
+} from "@/actions/stream";
 import AuthContext from "@/app/components/AuthContext";
 import {
   DialogContent,
@@ -19,6 +23,9 @@ export default function CreateGroupModal({
   setOpen: Dispatch<React.SetStateAction<boolean>>;
 }) {
   const { role, user } = useContext(AuthContext);
+  const [classes, setClasses] = useState<SchoolClassSummary[]>([]);
+  const [classId, setClassId] = useState("");
+  const [isLoadingClasses, setIsLoadingClasses] = useState(true);
   const [members, setMembers] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
@@ -28,6 +35,35 @@ export default function CreateGroupModal({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+
+  useEffect(() => {
+    if (!user || role !== "administrator") return;
+    let cancelled = false;
+
+    const loadClasses = async () => {
+      setIsLoadingClasses(true);
+      try {
+        const result = await getAdministratorClasses(await user.getIdToken());
+        if (cancelled) return;
+        if (!result.success) {
+          setErrorMessage(result.error ?? "Unable to load classes");
+          return;
+        }
+        setClasses(result.classes);
+      } catch (error) {
+        if (!cancelled) {
+          setErrorMessage(error instanceof Error ? error.message : "Unable to load classes");
+        }
+      } finally {
+        if (!cancelled) setIsLoadingClasses(false);
+      }
+    };
+
+    void loadClasses();
+    return () => {
+      cancelled = true;
+    };
+  }, [role, user]);
 
   const analyzeAssignment = async () => {
     setErrorMessage("");
@@ -75,6 +111,7 @@ export default function CreateGroupModal({
       const usernames = [...new Set(members.split(",").map((member) => member.trim().toLowerCase()).filter(Boolean))];
       const { success, error } = await createAssignmentChannel({
         assignmentType: "group",
+        classId,
         firebaseIdToken: await user.getIdToken(),
         memberUsernames: usernames,
         plan: {
@@ -103,6 +140,18 @@ export default function CreateGroupModal({
         <DialogDescription>Add at least two people, including at least one student. Multiple administrators are welcome.</DialogDescription>
       </DialogHeader>
       <form className="space-y-4" onSubmit={handleCreateGroup}>
+        <label className="block space-y-2 text-sm font-medium">
+          <span className="flex items-center gap-2"><School className="size-4" /> Class</span>
+          {isLoadingClasses ? (
+            <span className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-3 text-slate-500"><Loader2 className="size-4 animate-spin" /> Loading classes...</span>
+          ) : (
+            <select className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5" disabled={classes.length === 0} onChange={(event) => setClassId(event.target.value)} required value={classId}>
+              <option value="">Select a class</option>
+              {classes.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.id}>{schoolClass.name}</option>)}
+            </select>
+          )}
+          {!isLoadingClasses && classes.length === 0 && <span className="block text-xs text-amber-700">Create a class before starting a group project.</span>}
+        </label>
         <label className="block space-y-2 text-sm font-medium">Student and administrator usernames<input className="w-full rounded-xl border border-slate-300 px-3 py-2.5" onChange={(event) => setMembers(event.target.value)} placeholder="alex, ms.jones, taylor" required value={members} /><span className="block text-xs font-normal text-slate-500">Comma-separated. You are added automatically.</span></label>
         <label className="block space-y-2 text-sm font-medium">Project description<textarea className="min-h-28 w-full rounded-xl border border-slate-300 px-3 py-2.5" maxLength={12000} onChange={(event) => setDescription(event.target.value)} placeholder="Describe the project requirements, or upload them below." value={description} /></label>
         <label className="block space-y-2 text-sm font-medium">Screenshot or document (optional)<input accept=".gif,.jpeg,.jpg,.pdf,.png,.txt,.webp,.doc,.docx" className="block w-full rounded-xl border border-dashed border-indigo-300 p-3 text-xs" onChange={(event) => setFile(event.target.files?.[0] ?? null)} type="file" /><span className="block text-xs font-normal text-slate-500">Maximum 10 MB. Avoid student names, grades, or private information.</span></label>
@@ -111,7 +160,7 @@ export default function CreateGroupModal({
 
         {analysis && <section className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4"><p className="font-semibold">Review the suggested plan</p><p className="text-xs text-slate-600">AI estimates can be wrong. Confirm everything before creating the project.</p><label className="block space-y-2 text-sm font-medium">Project title<input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5" maxLength={100} minLength={3} onChange={(event) => setTitle(event.target.value)} required value={title} /></label><label className="block space-y-2 text-sm font-medium">Due date (required)<input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5" min={new Date().toISOString().slice(0, 10)} onChange={(event) => setDueDate(event.target.value)} required type="date" value={dueDate} /></label><div className="grid grid-cols-2 gap-2 text-sm"><div className="rounded-xl bg-white p-3"><span className="block text-slate-500">Effort</span><strong>{analysis.estimatedTotalMinutes} min</strong></div><div className="rounded-xl bg-white p-3"><span className="block text-slate-500">Streak target</span><strong>{analysis.recommendedWorkDays} days</strong></div></div><p className="text-sm leading-6 text-slate-600">{analysis.assignmentSummary}</p><ol className="space-y-2">{analysis.dailyTasks.map((task) => <li className="rounded-xl bg-white p-3 text-sm" key={task.dayNumber}><strong>Day {task.dayNumber}: {task.title}</strong><span className="float-right text-slate-500">{task.estimatedMinutes} min</span><p className="mt-1 text-slate-600">{task.description}</p></li>)}</ol></section>}
         {errorMessage && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{errorMessage}</p>}
-        {analysis && <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white disabled:opacity-60" disabled={isCreating || !dueDate || !title.trim()} type="submit">{isCreating && <Loader2 className="size-4 animate-spin" />}{isCreating ? "Creating project..." : "Create group project"}</button>}
+        {analysis && <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white disabled:opacity-60" disabled={isCreating || !classId || !dueDate || !title.trim()} type="submit">{isCreating && <Loader2 className="size-4 animate-spin" />}{isCreating ? "Creating project..." : "Create group project"}</button>}
       </form>
     </DialogContent>
   );
