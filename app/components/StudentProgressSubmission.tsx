@@ -21,6 +21,7 @@ export function StudentProgressSubmission() {
   const { role, user } = useContext(AuthContext);
   const { channel } = useChannelStateContext("StudentProgressSubmission");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [note, setNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -90,6 +91,7 @@ export function StudentProgressSubmission() {
         setFile(null);
         setNote("");
         if (fileInputRef.current) fileInputRef.current.value = "";
+        if (cameraInputRef.current) cameraInputRef.current.value = "";
       }
     } catch (error) {
       setErrorMessage(
@@ -118,20 +120,44 @@ export function StudentProgressSubmission() {
 
       <form className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]" onSubmit={submitProgress}>
         <div className="space-y-2">
-          <label className="flex cursor-pointer items-center gap-2 rounded-2xl border-2 border-dashed border-black bg-[#f4f0e8] px-3 py-3 text-xs font-bold text-zinc-700 transition hover:bg-[#fffc00]">
-            <Upload className="size-4 text-black" />
-            <input
-              accept=".gif,.jpeg,.jpg,.pdf,.png,.txt,.webp,.doc,.docx"
-              className="min-w-0 flex-1"
-              onChange={(event) => {
-                setFile(event.target.files?.[0] ?? null);
-                setErrorMessage("");
-                setResult(null);
-              }}
-              ref={fileInputRef}
-              type="file"
-            />
-          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-black bg-[#fffc00] px-3 py-3 text-xs font-black text-black transition hover:-translate-y-0.5">
+              <Camera className="size-4" />
+              Take photo
+              <input
+                accept="image/*"
+                capture="environment"
+                className="sr-only"
+                onChange={(event) => {
+                  setFile(event.target.files?.[0] ?? null);
+                  setErrorMessage("");
+                  setResult(null);
+                }}
+                ref={cameraInputRef}
+                type="file"
+              />
+            </label>
+            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-black bg-white px-3 py-3 text-xs font-black text-black transition hover:-translate-y-0.5">
+              <Upload className="size-4" />
+              Choose file
+              <input
+                accept=".gif,.jpeg,.jpg,.pdf,.png,.txt,.webp,.doc,.docx"
+                className="sr-only"
+                onChange={(event) => {
+                  setFile(event.target.files?.[0] ?? null);
+                  setErrorMessage("");
+                  setResult(null);
+                }}
+                ref={fileInputRef}
+                type="file"
+              />
+            </label>
+          </div>
+          {file && (
+            <p className="truncate rounded-xl bg-[#f4f0e8] px-3 py-2 text-xs font-bold text-zinc-700">
+              Selected: {file.name}
+            </p>
+          )}
           <input
             className="w-full rounded-2xl border-2 border-black bg-white px-3 py-2.5 text-sm outline-none focus:shadow-[2px_2px_0_#111]"
             maxLength={2000}

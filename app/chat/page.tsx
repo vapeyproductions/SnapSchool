@@ -17,6 +17,7 @@ import AuthContext from "@/app/components/AuthContext";
 import CreateGroupModal from "@/app/components/CreateGroupModal";
 import CreateIndependentAssignmentModal from "@/app/components/CreateIndependentAssignmentModal";
 import CreateStreakModal from "@/app/components/CreateStreakModal";
+import InstallAppButton from "@/app/components/InstallAppButton";
 import ManageClassesModal from "@/app/components/ManageClassesModal";
 import ProfileSettingsModal from "@/app/components/ProfileSettingsModal";
 import StreakPage from "@/app/components/StreakPage";
@@ -90,7 +91,7 @@ export default function ChatPage() {
               <BookOpen className="size-5" strokeWidth={2.5} />
               <Flame className="absolute -right-1 -top-1 size-4 fill-[#ff5b35] text-[#ff5b35]" />
             </div>
-            <div>
+            <div className="hidden min-[430px]:block">
               <p className="text-xl font-black tracking-[-0.04em]">SnapSchool</p>
               <p className="hidden text-[10px] font-bold uppercase tracking-[0.16em] sm:block">
                 Make progress visible
@@ -105,6 +106,7 @@ export default function ChatPage() {
           )}
 
           <div className="flex items-center gap-2">
+            {!isAdministrator && <InstallAppButton />}
             <button
               aria-label="Notifications"
               className="hidden size-10 items-center justify-center rounded-full border-2 border-black bg-white transition hover:-translate-y-0.5 sm:flex"
