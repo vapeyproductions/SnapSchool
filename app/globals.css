@@ -231,6 +231,27 @@
 }
 
 @media (max-width: 767px) {
+  .mobile-assignment-list[data-mobile-hidden="true"],
+  .mobile-assignment-detail[data-mobile-hidden="true"] {
+    display: none !important;
+  }
+
+  .mobile-assignment-list[data-mobile-hidden="false"] {
+    display: block !important;
+  }
+
+  .mobile-assignment-detail[data-mobile-hidden="false"] {
+    display: flex !important;
+  }
+
+  .mobile-assignment-back {
+    display: flex !important;
+  }
+
+  .mobile-assignment-detail > .str-chat__channel {
+    flex: 1;
+  }
+
   .social-workspace,
   .social-workspace .str-chat,
   .social-workspace .str-chat__channel,

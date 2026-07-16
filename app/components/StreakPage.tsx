@@ -1,7 +1,7 @@
 "use client";
 
 import type { User } from "firebase/auth";
-import { Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import {
   type Dispatch,
   type SetStateAction,
@@ -110,11 +110,8 @@ function AuthenticatedStreakPage({
     <Chat client={client}>
       <div className="chat-container flex h-[66vh] min-h-[36rem] max-h-[52rem] min-w-0 overflow-hidden bg-white max-md:h-[calc(100dvh-11rem)] max-md:max-h-none max-md:min-h-[32rem] max-md:flex-col">
         <div
-          className={`channel-list student-story-list w-80 shrink-0 overflow-y-auto border-r-2 border-black bg-[#f4f0e8] md:block ${
-            mobileAssignmentOpen
-              ? "max-md:hidden"
-              : "max-md:block max-md:h-full max-md:w-full max-md:border-r-0"
-          }`}
+          className="mobile-assignment-list channel-list student-story-list w-80 shrink-0 overflow-y-auto border-r-2 border-black bg-[#f4f0e8] max-md:h-full max-md:w-full max-md:border-r-0"
+          data-mobile-hidden={mobileAssignmentOpen}
         >
           <div className="sticky top-0 z-10 border-b-2 border-black bg-[#fffc00] px-4 py-3">
             <p className="text-xs font-black uppercase tracking-[0.13em] text-black">Assignments</p>
@@ -134,12 +131,16 @@ function AuthenticatedStreakPage({
         </div>
 
         <div
-          className={`chat-panel min-w-0 max-w-full flex-1 overflow-hidden bg-white md:block ${
-            mobileAssignmentOpen
-              ? "max-md:block max-md:h-full max-md:w-full"
-              : "max-md:hidden"
-          }`}
+          className="mobile-assignment-detail chat-panel min-w-0 max-w-full flex-1 overflow-hidden bg-white max-md:h-full max-md:w-full max-md:flex-col"
+          data-mobile-hidden={!mobileAssignmentOpen}
         >
+          <button
+            className="mobile-assignment-back shrink-0 items-center gap-2 border-b-2 border-black bg-white px-4 py-3 text-sm font-black text-black md:hidden"
+            onClick={() => setMobileAssignmentOpen(false)}
+            type="button"
+          >
+            <ArrowLeft className="size-4" /> Back to assignments
+          </button>
           {channelError && (
             <p className="border-b-2 border-red-600 bg-red-50 px-4 py-2 text-sm text-red-700" role="alert">
               {channelError}
@@ -147,7 +148,6 @@ function AuthenticatedStreakPage({
           )}
           <Channel>
             <ChannelContent
-              onBackToAssignments={() => setMobileAssignmentOpen(false)}
               user={user}
               setReminderMessage={setReminderMessage}
               setStreakReminder={setStreakReminder}
