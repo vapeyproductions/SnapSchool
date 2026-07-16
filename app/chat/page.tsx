@@ -84,7 +84,7 @@ export default function ChatPage() {
               onClick={() => setView("individual")}
               type="button"
             >
-              Today&apos;s streaks
+              Individual assignments
             </button>
             <button
               className={`rounded-full px-5 py-2 text-sm font-extrabold transition ${
