@@ -2,7 +2,7 @@
 
 import type { User } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
-import { ClipboardList, MessageCircleQuestion } from "lucide-react";
+import { ArrowLeft, ClipboardList, MessageCircleQuestion } from "lucide-react";
 import {
   type Dispatch,
   type SetStateAction,
@@ -31,6 +31,7 @@ import { StudentProgressSubmission } from "./StudentProgressSubmission";
 import { RequestTeacherButton } from "./RequestTeacherButton";
 
 type ChannelContentProps = {
+  onBackToAssignments?: () => void;
   user: User;
   setReminderMessage: Dispatch<SetStateAction<string>>;
   setStreakReminder: Dispatch<SetStateAction<boolean>>;
@@ -39,6 +40,7 @@ type ChannelContentProps = {
 type AssignmentView = "messages" | "plan";
 
 export function ChannelContent({
+  onBackToAssignments,
   user,
   setReminderMessage,
   setStreakReminder,
@@ -240,8 +242,17 @@ export function ChannelContent({
 
   return (
     <Window>
-      <div className="flex h-full min-h-0 flex-col">
+      <div className="flex h-full min-h-0 min-w-0 max-w-full flex-col overflow-x-hidden">
         <header className="shrink-0 border-b-2 border-black bg-black px-4 py-3 text-white">
+          {onBackToAssignments && (
+            <button
+              className="mb-3 flex items-center gap-2 rounded-full border border-white/40 bg-white px-3 py-1.5 text-xs font-black text-black md:hidden"
+              onClick={onBackToAssignments}
+              type="button"
+            >
+              <ArrowLeft className="size-4" /> Back to assignments
+            </button>
+          )}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <p className="truncate text-lg font-black tracking-tight text-white">
@@ -296,7 +307,7 @@ export function ChannelContent({
 
         {view === "plan" ? (
           <div className="min-h-0 flex-1 overflow-y-auto bg-[#f4f0e8]">
-            <div className="flex items-center justify-between gap-3 border-b-2 border-black bg-[#fffc00] px-4 py-3">
+            <div className="flex items-center justify-between gap-3 border-b-2 border-black bg-[#fffc00] px-4 py-3 max-sm:flex-col max-sm:items-start">
               <p className="text-sm font-black text-black">
                 <span className="mr-1.5 inline-flex size-7 items-center justify-center rounded-full bg-[#ff5b35] text-white">🔥</span>
                 {currentStreak} day streak

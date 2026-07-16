@@ -50,6 +50,7 @@ function AuthenticatedStreakPage({
   const { client } = useGetStreamClient(user);
   const [assignmentChannels, setAssignmentChannels] = useState<StreamChannel[]>([]);
   const [channelError, setChannelError] = useState("");
+  const [mobileAssignmentOpen, setMobileAssignmentOpen] = useState(false);
   const filters: ChannelFilters = {
     members: { $in: [user.uid] },
     type: "messaging",
@@ -107,9 +108,13 @@ function AuthenticatedStreakPage({
 
   return (
     <Chat client={client}>
-      <div className="chat-container flex h-[66vh] min-h-[36rem] max-h-[52rem] overflow-hidden bg-white max-md:h-auto max-md:min-h-0 max-md:flex-col">
+      <div className="chat-container flex h-[66vh] min-h-[36rem] max-h-[52rem] min-w-0 overflow-hidden bg-white max-md:h-[calc(100dvh-11rem)] max-md:max-h-none max-md:min-h-[32rem] max-md:flex-col">
         <div
-          className="channel-list student-story-list w-80 shrink-0 overflow-y-auto border-r-2 border-black bg-[#f4f0e8] max-md:h-48 max-md:w-full max-md:border-b-2 max-md:border-r-0"
+          className={`channel-list student-story-list w-80 shrink-0 overflow-y-auto border-r-2 border-black bg-[#f4f0e8] md:block ${
+            mobileAssignmentOpen
+              ? "max-md:hidden"
+              : "max-md:block max-md:h-full max-md:w-full max-md:border-r-0"
+          }`}
         >
           <div className="sticky top-0 z-10 border-b-2 border-black bg-[#fffc00] px-4 py-3">
             <p className="text-xs font-black uppercase tracking-[0.13em] text-black">Assignments</p>
@@ -121,13 +126,20 @@ function AuthenticatedStreakPage({
             channels={assignmentChannels}
             enabled
             filters={filters}
+            onChannelSelected={() => setMobileAssignmentOpen(true)}
             onDailyMinutesChange={onDailyMinutesChange}
             options={options}
             sort={sort}
           />
         </div>
 
-        <div className="chat-panel min-w-0 flex-1 bg-white max-md:h-[38rem]">
+        <div
+          className={`chat-panel min-w-0 max-w-full flex-1 overflow-hidden bg-white md:block ${
+            mobileAssignmentOpen
+              ? "max-md:block max-md:h-full max-md:w-full"
+              : "max-md:hidden"
+          }`}
+        >
           {channelError && (
             <p className="border-b-2 border-red-600 bg-red-50 px-4 py-2 text-sm text-red-700" role="alert">
               {channelError}
@@ -135,6 +147,7 @@ function AuthenticatedStreakPage({
           )}
           <Channel>
             <ChannelContent
+              onBackToAssignments={() => setMobileAssignmentOpen(false)}
               user={user}
               setReminderMessage={setReminderMessage}
               setStreakReminder={setStreakReminder}

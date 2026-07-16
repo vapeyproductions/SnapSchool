@@ -112,9 +112,9 @@ export function AssignmentPlanPanel({
       )}
       {tasks.length > 0 && (
         <details className="mt-4 border-t-2 border-dashed border-zinc-300 pt-3">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-2 py-2 font-black text-black hover:bg-[#f4f0e8]">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-2 py-2 font-black text-black hover:bg-[#f4f0e8] max-sm:items-start">
             <span className="flex items-center gap-2"><ListChecks className="size-4" /> Open {isAssessment ? "study roadmap" : "assignment roadmap"}</span>
-            <span className="text-xs font-bold text-zinc-500">{futureTasks.length} future mission{futureTasks.length === 1 ? "" : "s"} ▾</span>
+            <span className="shrink-0 text-right text-xs font-bold text-zinc-500">{futureTasks.length} future mission{futureTasks.length === 1 ? "" : "s"} ▾</span>
           </summary>
           <div className="mt-3 rounded-2xl bg-[#f4f0e8] p-3">
             <div className="flex flex-wrap gap-2">

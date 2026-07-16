@@ -231,25 +231,46 @@
 }
 
 @media (max-width: 767px) {
+  .social-workspace,
+  .social-workspace .str-chat,
+  .social-workspace .str-chat__channel,
+  .social-workspace .str-chat__container,
+  .social-workspace .str-chat__main-panel,
+  .social-workspace .str-chat__window {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .social-workspace .str-chat__channel,
+  .social-workspace .str-chat__container,
+  .social-workspace .str-chat__main-panel,
+  .social-workspace .str-chat__window {
+    min-height: 0;
+    height: 100%;
+  }
+
+  .social-workspace .str-chat__window {
+    overflow-x: hidden;
+  }
+
   .social-workspace {
     border-radius: 1.35rem;
   }
 
   .student-story-list .str-chat__channel-list-inner__main {
-    display: flex;
-    width: max-content;
+    display: block;
+    width: 100%;
     min-width: 100%;
-    gap: .5rem;
     padding: .55rem;
   }
 
   .student-story-list .assignment-story-card {
-    width: 15.5rem;
-    flex: 0 0 15.5rem;
-    margin: 0;
+    width: 100%;
+    margin-bottom: .6rem;
   }
 
   .student-story-list .str-chat__channel-list {
-    overflow-x: auto;
+    overflow-x: hidden;
   }
 }

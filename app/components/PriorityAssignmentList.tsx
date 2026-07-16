@@ -16,6 +16,7 @@ type PriorityAssignmentListProps = {
   channels?: Channel[];
   enabled: boolean;
   filters: ChannelFilters;
+  onChannelSelected?: () => void;
   onDailyMinutesChange?: (minutes: number) => void;
   options: ChannelOptions;
   sort: ChannelSort;
@@ -78,6 +79,7 @@ export function PriorityAssignmentList({
   channels,
   enabled,
   filters,
+  onChannelSelected,
   onDailyMinutesChange,
   options,
   sort,
@@ -146,7 +148,10 @@ export function PriorityAssignmentList({
             data-active={activeChannel?.cid === channel.cid}
             data-urgency={priority.urgency}
             key={channel.cid}
-            onClick={(event) => setActiveChannel(channel, undefined, event)}
+            onClick={(event) => {
+              setActiveChannel(channel, undefined, event);
+              onChannelSelected?.();
+            }}
             style={{
               backgroundColor: enabled ? priority.color.background : undefined,
               borderLeftColor: enabled ? priority.color.border : "transparent",
@@ -209,7 +214,13 @@ export function PriorityAssignmentList({
         })}
       </>
     ),
-    [activeChannel?.cid, enabled, onDailyMinutesChange, setActiveChannel],
+    [
+      activeChannel?.cid,
+      enabled,
+      onChannelSelected,
+      onDailyMinutesChange,
+      setActiveChannel,
+    ],
   );
 
   const prioritizedChannels = useMemo(
