@@ -64,7 +64,7 @@ function AuthenticatedStreakPage({
         >
           {role === "student" && (
             <div className="sticky top-0 z-10 border-b-2 border-black bg-[#fffc00] px-4 py-3">
-              <p className="text-xs font-black uppercase tracking-[0.13em] text-black">Your streak feed</p>
+              <p className="text-xs font-black uppercase tracking-[0.13em] text-black">Assignments</p>
               <p className="mt-0.5 text-[11px] font-medium leading-4 text-zinc-700">
                 Most urgent is always at the top.
               </p>

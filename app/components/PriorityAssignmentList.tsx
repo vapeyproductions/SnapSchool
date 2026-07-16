@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, Clock3, Flame } from "lucide-react";
+import { CalendarDays, Clock3, Flame } from "lucide-react";
 import { useCallback } from "react";
 import type { ReactNode } from "react";
 import type {
@@ -142,11 +142,12 @@ export function PriorityAssignmentList({
           )}
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-slate-500">
             <span className="flex items-center gap-1">
-              {priority.urgency === "complete" ? <CheckCircle2 className="size-3" /> : priority.urgency === "critical" ? <AlertTriangle className="size-3" /> : <Clock3 className="size-3" />}
+              <CalendarDays className="size-3" />
               {dueDate ? `Due ${dueDate} · ${priority.dueLabel}` : priority.dueLabel}
             </span>
             {typeof currentMission?.estimatedMinutes === "number" ? (
-              <span className="font-semibold text-slate-700">
+              <span className="flex items-center gap-1 font-semibold text-slate-700">
+                <Clock3 className="size-3" />
                 Today · {currentMission.estimatedMinutes} min
               </span>
             ) : (
