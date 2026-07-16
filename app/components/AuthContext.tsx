@@ -72,10 +72,13 @@ export function AuthProvider({
           return;
         }
 
-        const profile = await getDoc(doc(db, "users", currentUser.displayName));
+        let profile = await getDoc(doc(db, "profiles", currentUser.uid));
+        if (!profile.exists()) {
+          profile = await getDoc(doc(db, "users", currentUser.displayName));
+        }
         const storedRole = profile.data()?.role;
         const verifiedRole =
-          storedRole === "student" || storedRole === "administrator"
+          storedRole === "student" || storedRole === "administrator" || storedRole === "parent"
             ? storedRole
             : null;
 

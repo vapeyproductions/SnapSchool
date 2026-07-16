@@ -19,6 +19,7 @@ import { Channel, Chat } from "stream-chat-react";
 
 import AdministratorClassDashboard from "./AdministratorClassDashboard";
 import AuthContext from "./AuthContext";
+import ParentDashboard from "./ParentDashboard";
 import { ChannelContent } from "./ChannelContent";
 import { PriorityAssignmentList } from "./PriorityAssignmentList";
 import { useGetStreamClient } from "./useGetStreamClient";
@@ -152,6 +153,10 @@ export default function StreakPage({
 
   if (role === "administrator") {
     return <AdministratorClassDashboard user={user} />;
+  }
+
+  if (role === "parent") {
+    return <ParentDashboard user={user} />;
   }
 
   return (

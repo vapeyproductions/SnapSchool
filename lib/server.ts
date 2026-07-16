@@ -16,7 +16,7 @@ import type { ChannelMemberResponse } from "stream-chat";
 
 import db, { auth } from "./firebase";
 
-export type AccountRole = "student" | "administrator";
+export type AccountRole = "student" | "administrator" | "parent";
 
 export const registerUser = async (form: FormData) => {
   let createdUser: typeof auth.currentUser = null;
@@ -46,7 +46,7 @@ export const registerUser = async (form: FormData) => {
       throw new Error("Password must contain at least 8 characters");
     }
 
-    if (roleValue !== "student" && roleValue !== "administrator") {
+    if (roleValue !== "student" && roleValue !== "administrator" && roleValue !== "parent") {
       throw new Error("Select a valid account type");
     }
 
@@ -83,6 +83,13 @@ export const registerUser = async (form: FormData) => {
         uid: user.uid,
         username,
         email: user.email,
+        photoURL,
+        role,
+        createdAt: serverTimestamp(),
+      });
+      transaction.set(doc(db, "profiles", user.uid), {
+        uid: user.uid,
+        username,
         photoURL,
         role,
         createdAt: serverTimestamp(),
@@ -125,7 +132,7 @@ export const loginUser = async (form: FormData) => {
       throw new Error("Email and password are required");
     }
 
-    if (selectedRole !== "student" && selectedRole !== "administrator") {
+    if (selectedRole !== "student" && selectedRole !== "administrator" && selectedRole !== "parent") {
       throw new Error("Select a valid account type");
     }
 
@@ -168,6 +175,74 @@ export const loginUser = async (form: FormData) => {
   }
 };
 
+export const changeUsername = async (newUsernameValue: string) => {
+  const user = auth.currentUser;
+  const currentUsername = user?.displayName?.trim().toLowerCase();
+  const newUsername = newUsernameValue.trim().toLowerCase();
+
+  try {
+    if (!user || !currentUsername) throw new Error("You must be signed in");
+    if (!/^[a-z0-9_.-]{3,30}$/.test(newUsername)) {
+      throw new Error("Username must be 3-30 characters and use only letters, numbers, dots, underscores, or hyphens");
+    }
+    if (newUsername === currentUsername) {
+      return { success: true, message: "Your username is already up to date" };
+    }
+
+    const currentRef = doc(db, "users", currentUsername);
+    const nextRef = doc(db, "users", newUsername);
+    const profileRef = doc(db, "profiles", user.uid);
+    const imageBaseUrl = process.env.NEXT_PUBLIC_IMAGE_URL;
+    if (!imageBaseUrl) throw new Error("User image configuration is missing");
+    const photoURL = `${imageBaseUrl}${encodeURIComponent(newUsername)}`;
+    const previousPhotoURL = user.photoURL;
+
+    await updateProfile(user, { displayName: newUsername, photoURL });
+    try {
+      await runTransaction(db, async (transaction) => {
+        const [currentProfile, nextProfile] = await Promise.all([
+          transaction.get(currentRef),
+          transaction.get(nextRef),
+        ]);
+        if (!currentProfile.exists() || currentProfile.data().uid !== user.uid) {
+          throw new Error("Your existing profile could not be verified");
+        }
+        if (nextProfile.exists()) throw new Error("That username is already taken");
+
+        const updatedProfile = {
+          ...currentProfile.data(),
+          username: newUsername,
+          photoURL,
+          updatedAt: serverTimestamp(),
+        };
+        transaction.set(nextRef, updatedProfile);
+        transaction.set(profileRef, {
+          uid: user.uid,
+          username: newUsername,
+          photoURL,
+          role: currentProfile.data().role,
+          createdAt: currentProfile.data().createdAt ?? serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }, { merge: true });
+        transaction.delete(currentRef);
+      });
+    } catch (error) {
+      await updateProfile(user, {
+        displayName: currentUsername,
+        photoURL: previousPhotoURL,
+      }).catch(() => undefined);
+      throw error;
+    }
+
+    return { success: true, message: "Username updated successfully" };
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Unable to update username",
+    };
+  }
+};
+
 export const logoutUser = async () => {
   try {
     await signOut(auth);
@@ -189,7 +264,7 @@ export const logoutUser = async () => {
   }
 };
 
-// Get Firebase user IDs from student or administrator usernames.
+// Get Firebase user IDs from SchoolSnap usernames.
 export const getUserIDsByUsernames = async (
   usernames: string[],
 ): Promise<string[]> => {

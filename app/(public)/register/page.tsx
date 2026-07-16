@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { cacheAccountRole } from "@/lib/auth-role-cache";
 import { registerUser } from "@/lib/server";
 
-type AccountType = "student" | "administrator";
+type AccountType = "student" | "administrator" | "parent";
 
 export default function RegisterPage() {
   const [buttonClicked, setButtonClicked] = useState(false);
@@ -62,7 +62,7 @@ export default function RegisterPage() {
       </div>
 
       <div
-        className="mb-6 grid grid-cols-2 rounded-full border-2 border-black bg-[#f4f0e8] p-1"
+        className="mb-6 grid grid-cols-3 rounded-full border-2 border-black bg-[#f4f0e8] p-1"
         aria-label="Account type"
       >
         <button
@@ -88,6 +88,18 @@ export default function RegisterPage() {
           }`}
         >
           Administrator
+        </button>
+        <button
+          type="button"
+          aria-pressed={accountType === "parent"}
+          onClick={() => setAccountType("parent")}
+          className={`rounded-full px-3 py-2 text-sm font-bold transition-colors ${
+            accountType === "parent"
+              ? "bg-black text-white"
+              : "text-zinc-600 hover:text-zinc-950"
+          }`}
+        >
+          Parent
         </button>
       </div>
 
@@ -146,7 +158,7 @@ export default function RegisterPage() {
           {buttonClicked
             ? "Registering..."
             : `Create ${
-                accountType === "student" ? "student" : "administrator"
+                accountType
               } account`}
         </button>
 

@@ -12,7 +12,7 @@ const serverClient = StreamChat.getInstance(
   STREAM_API_SECRET,
 );
 
-type AccountRole = "student" | "administrator";
+type AccountRole = "student" | "administrator" | "parent";
 type AssignmentType = "individual" | "group";
 
 type AssignmentChannelArgs = {
@@ -110,12 +110,47 @@ const getProfile = async (
 
   if (
     !uid ||
-    (role !== "student" && role !== "administrator")
+    (role !== "student" && role !== "administrator" && role !== "parent")
   ) {
     throw new Error(`The user "${normalizedUsername}" has an invalid profile`);
   }
 
   return { role, uid, username: normalizedUsername };
+};
+
+const getProfileByUid = async (
+  firebaseIdToken: string,
+  uid: string,
+  fallbackUsername?: string,
+): Promise<UserProfile> => {
+  const { firebaseProjectId } = requireServerConfig();
+  const response = await fetch(
+    `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}` +
+      `/databases/(default)/documents/profiles/${encodeURIComponent(uid)}`,
+    {
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${firebaseIdToken}` },
+    },
+  );
+
+  if (response.ok) {
+    const document = (await response.json()) as {
+      fields?: Record<string, { stringValue?: string }>;
+    };
+    const profileUid = document.fields?.uid?.stringValue;
+    const username = document.fields?.username?.stringValue;
+    const role = document.fields?.role?.stringValue;
+    if (
+      profileUid === uid &&
+      username &&
+      (role === "student" || role === "administrator" || role === "parent")
+    ) {
+      return { role, uid, username };
+    }
+  }
+
+  if (fallbackUsername) return getProfile(firebaseIdToken, fallbackUsername);
+  throw new Error("Unable to load this SchoolSnap profile");
 };
 
 const verifyFirebaseAccount = async (
@@ -151,7 +186,11 @@ const authenticateCaller = async (
 ): Promise<UserProfile> => {
   const account = await verifyFirebaseAccount(firebaseIdToken);
 
-  const profile = await getProfile(firebaseIdToken, account.username);
+  const profile = await getProfileByUid(
+    firebaseIdToken,
+    account.uid,
+    account.username,
+  );
 
   if (profile.uid !== account.uid) {
     throw new Error("Your SchoolSnap profile could not be verified");
@@ -294,7 +333,15 @@ const getSchoolClass = async (
   );
 
   if (!schoolClass) throw new Error("That class has invalid roster data");
-  return schoolClass;
+  const students = await Promise.all(
+    schoolClass.studentIds.map((uid, index) =>
+      getProfileByUid(firebaseIdToken, uid, schoolClass.studentUsernames[index]),
+    ),
+  );
+  return {
+    ...schoolClass,
+    studentUsernames: students.map((student) => student.username),
+  };
 };
 
 const publicClassSummary = (
@@ -363,10 +410,28 @@ export const getAdministratorClasses = async (
     const rows = (await response.json()) as Array<{
       document?: FirestoreDocument;
     }>;
-    const classes = rows
+    const classRecords = rows
       .map((row) => row.document && classFromDocument(row.document))
       .filter((item): item is SchoolClassRecord => Boolean(item))
-      .filter((item) => item.administratorIds.includes(administrator.uid))
+      .filter((item) => item.administratorIds.includes(administrator.uid));
+    const hydratedClasses = await Promise.all(
+      classRecords.map(async (schoolClass) => {
+        const students = await Promise.all(
+          schoolClass.studentIds.map((uid, index) =>
+            getProfileByUid(
+              firebaseIdToken,
+              uid,
+              schoolClass.studentUsernames[index],
+            ),
+          ),
+        );
+        return {
+          ...schoolClass,
+          studentUsernames: students.map((student) => student.username),
+        };
+      }),
+    );
+    const classes = hydratedClasses
       .map(publicClassSummary)
       .sort((a, b) => a.name.localeCompare(b.name));
 
@@ -687,8 +752,12 @@ export const createClassAssignment = async (data: {
     }
 
     const students = await Promise.all(
-      schoolClass.studentUsernames.map((username) =>
-        getProfile(data.firebaseIdToken, username),
+      schoolClass.studentIds.map((uid, index) =>
+        getProfileByUid(
+          data.firebaseIdToken,
+          uid,
+          schoolClass.studentUsernames[index],
+        ),
       ),
     );
 

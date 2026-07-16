@@ -6,7 +6,7 @@ export const readCachedAccountRole = (uid: string): AccountRole | null => {
   if (typeof window === "undefined") return null;
 
   const role = window.sessionStorage.getItem(roleCacheKey(uid));
-  return role === "student" || role === "administrator" ? role : null;
+  return role === "student" || role === "administrator" || role === "parent" ? role : null;
 };
 
 export const cacheAccountRole = (uid: string, role: AccountRole) => {

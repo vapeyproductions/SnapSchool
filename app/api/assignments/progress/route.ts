@@ -18,7 +18,7 @@ const DOCUMENT_TYPES = new Set([
 ]);
 
 type FirebaseProfile = {
-  role: "student" | "administrator";
+  role: "student" | "administrator" | "parent";
   uid: string;
   username: string;
 };
@@ -71,7 +71,7 @@ const authenticateStudent = async (idToken: string): Promise<FirebaseProfile> =>
   };
   const role = profileData.fields?.role?.stringValue;
   const uid = profileData.fields?.uid?.stringValue;
-  if (!profileResponse.ok || uid !== account.localId || (role !== "student" && role !== "administrator")) {
+  if (!profileResponse.ok || uid !== account.localId || (role !== "student" && role !== "administrator" && role !== "parent")) {
     throw new Error("Your SchoolSnap profile could not be verified");
   }
   if (role !== "student") throw new Error("Only students can submit progress evidence");

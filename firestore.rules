@@ -7,7 +7,7 @@ service cloud.firestore {
     }
 
     function validRole(data) {
-      return data.role == 'student' || data.role == 'administrator';
+      return data.role == 'student' || data.role == 'administrator' || data.role == 'parent';
     }
 
     match /users/{username} {
@@ -32,6 +32,53 @@ service cloud.firestore {
         && request.resource.data.role == resource.data.role;
 
       allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    match /profiles/{uid} {
+      // UID-keyed profiles keep authorization and family connections stable
+      // when an account owner changes their public username.
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid
+        && validRole(request.resource.data);
+      allow update: if signedIn()
+        && uid == request.auth.uid
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.role == resource.data.role;
+      allow delete: if false;
+    }
+
+    match /familyConnections/{connectionId} {
+      allow get: if signedIn()
+        && (resource.data.parentUid == request.auth.uid
+          || resource.data.studentUid == request.auth.uid);
+      allow list: if signedIn()
+        && (resource.data.parentUid == request.auth.uid
+          || resource.data.studentUid == request.auth.uid);
+
+      // Parents initiate or re-send a request. Identity fields cannot be
+      // changed after the connection record has been created.
+      allow create: if signedIn()
+        && request.resource.data.parentUid == request.auth.uid
+        && request.resource.data.status == 'pending';
+      allow update: if signedIn() && (
+        (resource.data.parentUid == request.auth.uid
+          && request.resource.data.parentUid == resource.data.parentUid
+          && request.resource.data.studentUid == resource.data.studentUid
+          && request.resource.data.status == 'pending')
+        ||
+        (resource.data.studentUid == request.auth.uid
+          && request.resource.data.parentUid == resource.data.parentUid
+          && request.resource.data.studentUid == resource.data.studentUid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'respondedAt'])
+          && request.resource.data.status in ['approved', 'rejected'])
+      );
+      allow delete: if signedIn()
+        && (resource.data.parentUid == request.auth.uid
+          || resource.data.studentUid == request.auth.uid);
     }
 
     match /channels/{channelId} {

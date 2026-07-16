@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { cacheAccountRole } from "@/lib/auth-role-cache";
 import { loginUser } from "@/lib/server";
 
-type LoginMode = "student" | "administrator";
+type LoginMode = "student" | "administrator" | "parent";
 
 export default function LoginPage() {
   const [buttonClicked, setButtonClicked] = useState(false);
@@ -33,7 +33,7 @@ export default function LoginPage() {
       if (
         result.status === 200 &&
         result.user &&
-        (result.role === "student" || result.role === "administrator")
+        (result.role === "student" || result.role === "administrator" || result.role === "parent")
       ) {
         cacheAccountRole(result.user.uid, result.role);
         isNavigating = true;
@@ -66,7 +66,7 @@ export default function LoginPage() {
       </div>
 
       <div
-        className="mb-6 grid grid-cols-2 rounded-full border-2 border-black bg-[#f4f0e8] p-1"
+        className="mb-6 grid grid-cols-3 rounded-full border-2 border-black bg-[#f4f0e8] p-1"
         aria-label="Account type"
       >
         <button
@@ -92,6 +92,18 @@ export default function LoginPage() {
           }`}
         >
           Administrator
+        </button>
+        <button
+          type="button"
+          aria-pressed={mode === "parent"}
+          onClick={() => setMode("parent")}
+          className={`rounded-full px-3 py-2 text-sm font-bold transition-colors ${
+            mode === "parent"
+              ? "bg-black text-white"
+              : "text-zinc-600 hover:text-zinc-950"
+          }`}
+        >
+          Parent
         </button>
       </div>
 
@@ -133,7 +145,7 @@ export default function LoginPage() {
         >
           {buttonClicked
             ? "Signing in..."
-            : `Sign in as ${mode === "student" ? "student" : "administrator"}`}
+            : `Sign in as ${mode}`}
         </button>
 
         {errorMessage && (

@@ -7,6 +7,7 @@ import {
   LogOut,
   Plus,
   School,
+  Settings,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useContext, useState } from "react";
@@ -15,6 +16,7 @@ import AuthContext from "@/app/components/AuthContext";
 import CreateGroupModal from "@/app/components/CreateGroupModal";
 import CreateStreakModal from "@/app/components/CreateStreakModal";
 import ManageClassesModal from "@/app/components/ManageClassesModal";
+import ProfileSettingsModal from "@/app/components/ProfileSettingsModal";
 import StreakPage from "@/app/components/StreakPage";
 import StreakReminderModal from "@/app/components/StreakReminderModal";
 import { Button } from "@/components/ui/button";
@@ -28,6 +30,7 @@ export default function ChatPage() {
   const [openStreakModal, setOpenStreakModal] = useState(false);
   const [openGroupModal, setOpenGroupModal] = useState(false);
   const [openClassesModal, setOpenClassesModal] = useState(false);
+  const [openProfileSettings, setOpenProfileSettings] = useState(false);
   const [streakReminder, setStreakReminder] = useState(false);
   const [reminderMessage, setReminderMessage] = useState("");
   const [dailyEstimatedMinutes, setDailyEstimatedMinutes] = useState(0);
@@ -36,6 +39,8 @@ export default function ChatPage() {
 
   const displayName = user?.displayName || user?.email?.split("@")[0] || "User";
   const isAdministrator = role === "administrator";
+  const isParent = role === "parent";
+  const isStudent = role === "student";
   const initial = displayName.charAt(0).toUpperCase();
 
   const handleLogout = async () => {
@@ -72,7 +77,7 @@ export default function ChatPage() {
 
           {!isAdministrator && (
             <div className="hidden rounded-full border-2 border-black bg-black px-6 py-2 text-sm font-extrabold text-white md:block">
-              Assignments
+              {isParent ? "Family progress" : "Assignments"}
             </div>
           )}
 
@@ -92,6 +97,12 @@ export default function ChatPage() {
                 initial
               )}
             </div>
+            <Dialog open={openProfileSettings} onOpenChange={setOpenProfileSettings}>
+              <DialogTrigger render={<button aria-label="Profile settings" className="flex size-10 items-center justify-center rounded-full border-2 border-black bg-white transition hover:-translate-y-0.5" type="button" />}>
+                <Settings className="size-4" />
+              </DialogTrigger>
+              <ProfileSettingsModal />
+            </Dialog>
             <button
               aria-label={isLoggingOut ? "Logging out" : "Log out"}
               className="flex size-10 items-center justify-center rounded-full border-2 border-black bg-white transition hover:bg-black hover:text-white disabled:opacity-50"
@@ -116,9 +127,9 @@ export default function ChatPage() {
           <div>
             <div className="mb-3 flex items-center gap-2">
               <span className="rounded-full bg-black px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-white">
-                {isAdministrator ? "Creator studio" : "Your study feed"}
+                {isAdministrator ? "Creator studio" : isParent ? "Family dashboard" : "Your study feed"}
               </span>
-              <span className="text-xs font-bold text-zinc-500">{isAdministrator ? "Administrator" : "Student"}</span>
+              <span className="text-xs font-bold capitalize text-zinc-500">{role}</span>
             </div>
             <h1 className="max-w-4xl text-3xl font-black leading-[0.95] tracking-[-0.055em] sm:text-5xl">
               Hey, <span className="capitalize">{displayName}</span>. <span className="text-[#f24e2e]">Keep it moving.</span>
@@ -126,11 +137,13 @@ export default function ChatPage() {
             <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-zinc-600 sm:text-base">
               {isAdministrator
                 ? "Publish assignments, watch class momentum, and jump into the conversations that need you."
-                : "Open a streak, finish today's step, and snap your progress before the day is over."}
+                : isParent
+                  ? "Keep up with upcoming assignments and the progress your approved students have made."
+                  : "Open a streak, finish today's step, and snap your progress before the day is over."}
             </p>
           </div>
 
-          {!isAdministrator && (
+          {isStudent && (
           <div className="flex items-center gap-3 rounded-[1.75rem] border-2 border-black bg-[#fffc00] px-4 py-3 shadow-[5px_5px_0_#111] sm:min-w-72">
             <div className="flex size-12 shrink-0 items-center justify-center rounded-full border-2 border-black bg-[#ff5b35] text-white">
               <Flame className="size-7 fill-current" />
