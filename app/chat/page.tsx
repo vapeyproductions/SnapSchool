@@ -108,11 +108,11 @@ export default function ChatPage() {
       <header className="snapschool-header sticky top-0 z-40 border-b-2 border-black bg-[#fffc00]">
         <div className="mx-auto flex min-h-[4.5rem] max-w-[1540px] flex-wrap items-center justify-between gap-3 px-4 py-2 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
-            <div className="relative flex size-11 items-center justify-center rounded-full border-2 border-black bg-white shadow-[3px_3px_0_#111]">
+            <div className="snapschool-brand-mark relative flex size-11 items-center justify-center rounded-full border-2 border-black bg-white shadow-[3px_3px_0_#111]">
               <BookOpen className="size-5" strokeWidth={2.5} />
               <Flame className="absolute -right-1 -top-1 size-4 fill-[#ff5b35] text-[#ff5b35]" />
             </div>
-            <div className="hidden min-[430px]:block">
+            <div className="snapschool-brand-copy hidden min-[430px]:block">
               <p className="text-xl font-black tracking-[-0.04em]">SnapSchool</p>
               <p className="hidden text-[10px] font-bold uppercase tracking-[0.16em] sm:block">
                 Make progress visible

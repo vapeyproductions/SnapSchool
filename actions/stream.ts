@@ -53,6 +53,7 @@ type FirestoreDocument = {
 };
 
 export type SchoolClassSummary = {
+  createdBy?: string;
   id: string;
   name: string;
   studentCount: number;
@@ -412,6 +413,7 @@ const getSchoolClass = async (
 const publicClassSummary = (
   schoolClass: SchoolClassRecord,
 ): SchoolClassSummary => ({
+  createdBy: schoolClass.createdBy,
   id: schoolClass.id,
   name: schoolClass.name,
   studentCount: schoolClass.studentCount,
@@ -621,6 +623,7 @@ export const createSchoolClass = async (data: {
 
     return {
       classRecord: {
+        createdBy: administrator.uid,
         id: classId,
         name,
         studentCount: students.length,
@@ -912,6 +915,7 @@ export const updateSchoolClass = async (data: {
 
     return {
       classRecord: {
+        createdBy: schoolClass.createdBy,
         id: schoolClass.id,
         name,
         studentCount: students.length,
@@ -1661,8 +1665,48 @@ export const deletePublishedAssignment = async (data: {
       }),
     );
 
-    if (channels.some(({ data: channelData }) => channelData.created_by_id !== creator.uid)) {
+    const hasDifferentCreator = channels.some(({ data: channelData }) => {
+      const creatorId =
+        typeof channelData.created_by_id === "string"
+          ? channelData.created_by_id.trim()
+          : "";
+      return Boolean(creatorId) && creatorId !== creator.uid;
+    });
+    if (hasDifferentCreator) {
       throw new Error("Only the person who created this assignment can delete it");
+    }
+
+    const legacyChannels = channels.filter(({ data: channelData }) => {
+      const creatorId =
+        typeof channelData.created_by_id === "string"
+          ? channelData.created_by_id.trim()
+          : "";
+      return !creatorId;
+    });
+    if (legacyChannels.length > 0) {
+      if (creator.role !== "administrator") {
+        throw new Error("Only the person who created this assignment can delete it");
+      }
+
+      const legacyClassIds = [
+        ...new Set(
+          legacyChannels.map(({ data: channelData }) => channelData.class_id),
+        ),
+      ];
+      if (
+        legacyClassIds.some((classId) => typeof classId !== "string")
+      ) {
+        throw new Error("This older assignment is missing creator information and cannot be deleted safely");
+      }
+
+      const legacyClasses = await Promise.all(
+        (legacyClassIds as string[]).map((classId) =>
+          getSchoolClass(data.firebaseIdToken, classId),
+        ),
+      );
+      if (legacyClasses.some((schoolClass) => schoolClass.createdBy !== creator.uid)) {
+        throw new Error("Only the person who created this assignment can delete it");
+      }
     }
 
     await Promise.all(channels.map(({ channel }) => channel.delete()));

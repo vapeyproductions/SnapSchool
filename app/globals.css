@@ -334,6 +334,24 @@ html.adult-mode-enabled [class*="ring-[#7b61ff]"] {
   --tw-ring-color: #94a3b8 !important;
 }
 
+/* Keep the navigation bar legible after the broad palette substitutions above. */
+html.adult-mode-enabled .adult-mode > .snapschool-header {
+  border-color: #244f73 !important;
+  background: #2f6690 !important;
+  color: #fff !important;
+}
+
+html.adult-mode-enabled .adult-mode .snapschool-brand-mark {
+  border-color: #dbe7f0 !important;
+  background: #fff !important;
+  color: #244f73 !important;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 20%) !important;
+}
+
+html.adult-mode-enabled .adult-mode .snapschool-brand-copy {
+  color: #fff !important;
+}
+
 .adult-mode .assignment-story-card {
   border-color: #cbd5e1 !important;
   border-left-color: #5d7f9c !important;

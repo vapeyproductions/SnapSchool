@@ -164,11 +164,13 @@ const isStudentMessage = (
 
 function AssignmentManagement({
   assignment,
+  classCreatedBy,
   onDeleted,
   onUpdated,
   user,
 }: {
   assignment: AssignmentGroup;
+  classCreatedBy?: string;
   onDeleted: (channelCids: string[]) => void;
   onUpdated: (
     channelCids: string[],
@@ -193,9 +195,10 @@ function AssignmentManagement({
   const assignmentUnit = isGroupAssignment ? "group" : "student";
   const assignmentSummary =
     assignment.channels[0]?.data?.assignment_summary || "No summary provided.";
-  const canDelete = assignment.channels.every(
-    (channel) => channel.data?.created_by_id === user.uid,
-  );
+  const canDelete = assignment.channels.every((channel) => {
+    const creatorId = channel.data?.created_by_id;
+    return creatorId === user.uid || (!creatorId && classCreatedBy === user.uid);
+  });
 
   const saveAssignment = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -886,6 +889,7 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
                   <div className="flex flex-wrap items-center justify-end gap-3">
                     <AssignmentManagement
                       assignment={selectedAssignment}
+                      classCreatedBy={selectedClass?.createdBy}
                       onDeleted={(channelCids) => {
                         const deletedCids = new Set(channelCids);
                         setChannels((current) => current.filter((channel) => !deletedCids.has(channel.cid)));
