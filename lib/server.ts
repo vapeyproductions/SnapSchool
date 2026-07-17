@@ -14,6 +14,7 @@ import {
 } from "firebase/firestore";
 import type { ChannelMemberResponse } from "stream-chat";
 
+import { isAvatarChoice } from "./avatar-options";
 import db, { auth } from "./firebase";
 
 export type AccountRole = "student" | "administrator" | "parent";
@@ -218,11 +219,12 @@ export const changeUsername = async (newUsernameValue: string) => {
 
     const imageBaseUrl = process.env.NEXT_PUBLIC_IMAGE_URL;
     if (!imageBaseUrl) throw new Error("User image configuration is missing");
-    const photoURL = `${imageBaseUrl}${encodeURIComponent(newUsername)}`;
+    const generatedPhotoURL = `${imageBaseUrl}${encodeURIComponent(newUsername)}`;
     const previousPhotoURL =
       typeof stableProfileData?.photoURL === "string"
         ? stableProfileData.photoURL
         : user.photoURL;
+    const photoURL = previousPhotoURL || generatedPhotoURL;
 
     if (newUsername === currentUsername) {
       if (authUsername !== currentUsername || user.photoURL !== photoURL) {
@@ -315,6 +317,66 @@ export const changeUsername = async (newUsernameValue: string) => {
     return {
       success: false,
       message: error instanceof Error ? error.message : "Unable to update username",
+    };
+  }
+};
+
+export const changeAvatar = async (photoURLValue: string) => {
+  const user = auth.currentUser;
+
+  try {
+    if (!user) throw new Error("You must be signed in");
+    const username = user.displayName?.trim().toLowerCase();
+    if (!username) throw new Error("Your profile could not be verified");
+
+    const imageBaseUrl = process.env.NEXT_PUBLIC_IMAGE_URL;
+    if (!imageBaseUrl) throw new Error("User image configuration is missing");
+    const photoURL = photoURLValue.trim();
+    if (!isAvatarChoice(imageBaseUrl, photoURL)) {
+      throw new Error("Choose one of the available SnapSchool avatars");
+    }
+
+    const profileRef = doc(db, "profiles", user.uid);
+    const usernameRef = doc(db, "users", username);
+    const previousPhotoURL = user.photoURL;
+
+    await updateProfile(user, { photoURL });
+    try {
+      await runTransaction(db, async (transaction) => {
+        const [profile, usernameProfile] = await Promise.all([
+          transaction.get(profileRef),
+          transaction.get(usernameRef),
+        ]);
+        const profileData = profile.data();
+        const usernameData = usernameProfile.data();
+
+        if (
+          (profile.exists() && profileData?.uid !== user.uid) ||
+          (usernameProfile.exists() && usernameData?.uid !== user.uid)
+        ) {
+          throw new Error("Your profile could not be verified");
+        }
+        if (!profile.exists() && !usernameProfile.exists()) {
+          throw new Error("Your profile could not be found");
+        }
+
+        if (profile.exists()) {
+          transaction.set(profileRef, { photoURL, updatedAt: serverTimestamp() }, { merge: true });
+        }
+        if (usernameProfile.exists()) {
+          transaction.set(usernameRef, { photoURL, updatedAt: serverTimestamp() }, { merge: true });
+        }
+      });
+    } catch (error) {
+      await updateProfile(user, { photoURL: previousPhotoURL }).catch(() => undefined);
+      throw error;
+    }
+
+    return { success: true, message: "Avatar updated successfully" };
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Unable to update avatar",
     };
   }
 };

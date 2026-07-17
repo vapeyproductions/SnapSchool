@@ -1,7 +1,7 @@
 "use client";
 
-import { Check, Loader2, ShieldCheck, UserRoundPlus, X } from "lucide-react";
-import { useContext, useEffect, useState } from "react";
+import { Check, Loader2, ShieldCheck, Sparkles, UserRoundPlus, X } from "lucide-react";
+import { useContext, useEffect, useMemo, useState } from "react";
 
 import {
   getProfileSettings,
@@ -11,7 +11,8 @@ import {
   type FamilyConnection,
 } from "@/actions/profile";
 import { DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { changeUsername } from "@/lib/server";
+import { getAvatarChoices } from "@/lib/avatar-options";
+import { changeAvatar, changeUsername } from "@/lib/server";
 
 import AuthContext from "./AuthContext";
 
@@ -22,6 +23,11 @@ export default function ProfileSettingsModal() {
   const [busyId, setBusyId] = useState("");
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const avatarChoices = useMemo(
+    () => getAvatarChoices(process.env.NEXT_PUBLIC_IMAGE_URL ?? ""),
+    [],
+  );
+  const [selectedAvatar, setSelectedAvatar] = useState(user?.photoURL ?? "");
 
   const loadSettings = async () => {
     if (!user) return;
@@ -67,6 +73,22 @@ export default function ProfileSettingsModal() {
     }
     setMessage(result.message);
     await user?.reload();
+    window.location.reload();
+  };
+
+  const updateAvatar = async () => {
+    if (!user || !selectedAvatar) return;
+    setBusyId("avatar");
+    setErrorMessage("");
+    setMessage("");
+    const result = await changeAvatar(selectedAvatar);
+    if (!result.success) {
+      setErrorMessage(result.message);
+      setBusyId("");
+      return;
+    }
+    setMessage(result.message);
+    await user.reload();
     window.location.reload();
   };
 
@@ -155,6 +177,47 @@ export default function ProfileSettingsModal() {
           </button>
         </form>
         <p className="mt-2 text-xs text-zinc-500">Usernames use letters, numbers, dots, underscores, or hyphens.</p>
+      </section>
+
+      <section className="rounded-2xl border-2 border-black bg-white p-4">
+        <div className="flex items-center gap-2">
+          <Sparkles className="size-5" />
+          <div>
+            <h3 className="font-black">Choose your character</h3>
+            <p className="text-xs text-zinc-500">Pick any avatar now and change it whenever you like.</p>
+          </div>
+        </div>
+        <div className="mt-4 grid grid-cols-4 gap-2 sm:grid-cols-5">
+          {avatarChoices.map((avatar) => {
+            const selected = selectedAvatar === avatar.url;
+            return (
+              <button
+                aria-label={`Choose ${avatar.label} avatar`}
+                aria-pressed={selected}
+                className={`relative aspect-square overflow-hidden rounded-xl border-2 bg-[#f4f0e8] p-1 transition hover:-translate-y-0.5 hover:border-black ${selected ? "border-black ring-4 ring-[#fffc00]" : "border-zinc-200"}`}
+                key={avatar.id}
+                onClick={() => setSelectedAvatar(avatar.url)}
+                type="button"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img alt="" className="size-full rounded-lg object-cover" src={avatar.url} />
+                {selected && (
+                  <span className="absolute right-1 top-1 flex size-5 items-center justify-center rounded-full bg-black text-white">
+                    <Check className="size-3.5" />
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <button
+          className="mt-4 w-full rounded-xl border-2 border-black bg-[#fffc00] px-4 py-2.5 font-black disabled:opacity-50"
+          disabled={busyId === "avatar" || !selectedAvatar || selectedAvatar === user?.photoURL}
+          onClick={() => void updateAvatar()}
+          type="button"
+        >
+          {busyId === "avatar" ? "Saving avatar…" : "Save avatar"}
+        </button>
       </section>
 
       {role === "parent" && (

@@ -163,14 +163,20 @@ export default function ChatPage() {
             {!isAdministrator && user && role && (
               <NotificationCenter role={role} user={user} />
             )}
-            <div className="flex size-10 items-center justify-center overflow-hidden rounded-full border-2 border-black bg-[#c7b7ff] text-sm font-black">
+            <button
+              aria-label="Choose profile avatar"
+              className="flex size-10 items-center justify-center overflow-hidden rounded-full border-2 border-black bg-[#c7b7ff] text-sm font-black transition hover:-translate-y-0.5"
+              onClick={() => setOpenProfileSettings(true)}
+              title="Choose profile avatar"
+              type="button"
+            >
               {user?.photoURL ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img className="size-full object-cover" src={user.photoURL} alt="" />
               ) : (
                 initial
               )}
-            </div>
+            </button>
             <Dialog open={openProfileSettings} onOpenChange={setOpenProfileSettings}>
               <DialogTrigger render={<button aria-label="Profile settings" className="flex size-10 items-center justify-center rounded-full border-2 border-black bg-white transition hover:-translate-y-0.5" type="button" />}>
                 <Settings className="size-4" />
@@ -179,7 +185,7 @@ export default function ChatPage() {
             </Dialog>
             <button
               aria-label={isLoggingOut ? "Logging out" : "Log out"}
-              className="flex size-10 items-center justify-center rounded-full border-2 border-black bg-white transition hover:bg-black hover:text-white disabled:opacity-50"
+              className="snapschool-logout-button flex size-10 items-center justify-center rounded-full border-2 border-black bg-white transition hover:bg-black hover:text-white disabled:opacity-50"
               disabled={isLoggingOut}
               onClick={handleLogout}
               type="button"

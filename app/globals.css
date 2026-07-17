@@ -375,6 +375,23 @@ html.adult-mode-enabled
   color: #163b59 !important;
 }
 
+html.adult-mode-enabled
+  .adult-mode
+  .snapschool-header-controls
+  .snapschool-logout-button {
+  border-color: #dbe7f0 !important;
+  background: #fff !important;
+  color: #244f73 !important;
+}
+
+html.adult-mode-enabled
+  .adult-mode
+  .snapschool-header-controls
+  .snapschool-logout-button:hover {
+  background: #eef4f8 !important;
+  color: #163b59 !important;
+}
+
 .adult-mode .assignment-story-card {
   border-color: #cbd5e1 !important;
   border-left-color: #5d7f9c !important;
