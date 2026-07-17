@@ -192,6 +192,9 @@ function AssignmentManagement({
   const assignmentUnit = isGroupAssignment ? "group" : "student";
   const assignmentSummary =
     assignment.channels[0]?.data?.assignment_summary || "No summary provided.";
+  const canDelete = assignment.channels.every(
+    (channel) => channel.data?.created_by_id === user.uid,
+  );
 
   const saveAssignment = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -291,7 +294,7 @@ function AssignmentManagement({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={deleteOpen} onOpenChange={(open) => { setDeleteOpen(open); setErrorMessage(""); }}>
+      {canDelete && <Dialog open={deleteOpen} onOpenChange={(open) => { setDeleteOpen(open); setErrorMessage(""); }}>
         <DialogTrigger render={<Button className="rounded-full border-2 border-red-700 bg-white px-3 font-black text-red-700 hover:bg-red-50" />}>
           <Trash2 className="size-4" /> Delete
         </DialogTrigger>
@@ -314,7 +317,7 @@ function AssignmentManagement({
             </Button>
           </div>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
     </div>
   );
 }

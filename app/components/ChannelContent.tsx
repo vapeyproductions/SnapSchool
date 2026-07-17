@@ -2,7 +2,7 @@
 
 import type { User } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
-import { ClipboardList, MessageCircleQuestion } from "lucide-react";
+import { ClipboardList, Loader2, MessageCircleQuestion, Trash2 } from "lucide-react";
 import {
   type Dispatch,
   type SetStateAction,
@@ -15,11 +15,13 @@ import {
 import {
   MessageComposer,
   MessageList,
+  useChatContext,
   useChannelStateContext,
   Window,
 } from "stream-chat-react";
 
 import db from "@/lib/firebase";
+import { deletePublishedAssignment } from "@/actions/stream";
 import {
   getUsernameById,
   isSameUTCDate,
@@ -44,6 +46,7 @@ export function ChannelContent({
   setStreakReminder,
 }: ChannelContentProps) {
   const { role } = useContext(AuthContext);
+  const { setActiveChannel } = useChatContext("ChannelContent");
   const { channel, members = {}, messages = [] } = useChannelStateContext(
     "ChannelContent",
   );
@@ -59,6 +62,7 @@ export function ChannelContent({
   const [currentStreak, setCurrentStreak] = useState(0);
   const [completedWorkDays, setCompletedWorkDays] = useState(0);
   const [syncError, setSyncError] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
   const completedDayRef = useRef("");
   const reminderStateRef = useRef("");
 
@@ -95,7 +99,30 @@ export function ChannelContent({
     channel.data?.assignment_kind ?? "",
   );
   const isGroupAssignment = channel.data?.assignment_type === "group";
-  const isIndependentAssignment = channel.data?.assignment_source === "independent";
+  const isPersonalAssignment =
+    channel.data?.assignment_source === "personal" ||
+    channel.data?.assignment_source === "independent";
+  const canDeletePersonalAssignment =
+    isPersonalAssignment && channel.data?.created_by_id === user.uid;
+
+  const deletePersonalAssignment = async () => {
+    if (!window.confirm(`Delete “${assignmentTitle}”? This removes its plan and submitted progress permanently.`)) return;
+    setIsDeleting(true);
+    setSyncError("");
+    try {
+      const result = await deletePublishedAssignment({
+        channelCids: [channel.cid],
+        firebaseIdToken: await user.getIdToken(),
+      });
+      if (!result.success) throw new Error(result.error ?? "Unable to delete the assignment");
+      const deletedCid = channel.cid;
+      setActiveChannel(undefined);
+      window.dispatchEvent(new CustomEvent("snapschool:assignment-deleted", { detail: { cid: deletedCid } }));
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : "Unable to delete the assignment");
+      setIsDeleting(false);
+    }
+  };
 
   useEffect(() => {
     if (!channel.cid) return;
@@ -217,7 +244,7 @@ export function ChannelContent({
   ]);
 
   const showReminder = () => {
-    if (isIndependentAssignment) {
+    if (isPersonalAssignment) {
       setReminderMessage(
         `Keep your ${assignmentTitle} plan moving today.${currentStreak > 0 ? ` Your current streak is ${currentStreak} day${currentStreak === 1 ? "" : "s"}.` : ""}`,
       );
@@ -284,7 +311,7 @@ export function ChannelContent({
                 <MessageCircleQuestion className="size-4" />
                 {isGroupAssignment
                   ? "Group chat"
-                  : isIndependentAssignment
+                  : isPersonalAssignment
                     ? "Notes"
                   : role === "student"
                     ? "Ask teacher"
@@ -311,8 +338,14 @@ export function ChannelContent({
                 onClick={showReminder}
                 type="button"
               >
-                {isIndependentAssignment ? "Progress reminder" : "Streak reminder"}
+                {isPersonalAssignment ? "Progress reminder" : "Streak reminder"}
               </button>
+              {canDeletePersonalAssignment && (
+                <button className="flex shrink-0 items-center gap-1.5 rounded-full border-2 border-red-700 bg-white px-3 py-1.5 text-xs font-black text-red-700 disabled:opacity-50" disabled={isDeleting} onClick={() => void deletePersonalAssignment()} type="button">
+                  {isDeleting ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+                  {isDeleting ? "Deleting…" : "Delete"}
+                </button>
+              )}
             </div>
             {syncError && (
               <p
@@ -334,7 +367,7 @@ export function ChannelContent({
               {role === "student"
                 ? isGroupAssignment
                   ? "Work together here. Use Request teacher only when the group needs direct help."
-                  : isIndependentAssignment
+                  : isPersonalAssignment
                     ? "Keep optional notes about this assignment here. Submit actual progress from the plan tab so AI can update the streak."
                   : "Ask your teacher a question about this assignment. Your conversation stays attached to this work."
                 : "Answer student questions and discuss this assignment here."}

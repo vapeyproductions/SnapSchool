@@ -10,9 +10,8 @@ import {
   Settings,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useContext, useEffect, useState } from "react";
+import { useContext, useState } from "react";
 
-import { getAssignableIndependentStudents } from "@/actions/profile";
 import AuthContext from "@/app/components/AuthContext";
 import CreateGroupModal from "@/app/components/CreateGroupModal";
 import CreateIndependentAssignmentModal from "@/app/components/CreateIndependentAssignmentModal";
@@ -28,7 +27,7 @@ import { clearCachedAccountRole } from "@/lib/auth-role-cache";
 import { logoutUser } from "@/lib/server";
 
 export default function ChatPage() {
-  const { role, studentMode, user } = useContext(AuthContext);
+  const { role, user } = useContext(AuthContext);
   const router = useRouter();
   const [openStreakModal, setOpenStreakModal] = useState(false);
   const [openGroupModal, setOpenGroupModal] = useState(false);
@@ -40,32 +39,13 @@ export default function ChatPage() {
   const [dailyEstimatedMinutes, setDailyEstimatedMinutes] = useState(0);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
-  const [hasIndependentChild, setHasIndependentChild] = useState(false);
 
   const displayName = user?.displayName || user?.email?.split("@")[0] || "User";
   const isAdministrator = role === "administrator";
   const isParent = role === "parent";
   const isStudent = role === "student";
-  const canCreateIndependentAssignment =
-    (isParent && hasIndependentChild) ||
-    (isStudent && studentMode === "independent");
+  const canCreatePersonalAssignment = isParent || isStudent;
   const initial = displayName.charAt(0).toUpperCase();
-
-  useEffect(() => {
-    if (!user || !isParent) {
-      return;
-    }
-    let active = true;
-    user.getIdToken()
-      .then((firebaseIdToken) => getAssignableIndependentStudents(firebaseIdToken))
-      .then((result) => {
-        if (active) setHasIndependentChild(result.success && result.students.length > 0);
-      })
-      .catch(() => {
-        if (active) setHasIndependentChild(false);
-      });
-    return () => { active = false; };
-  }, [isParent, user]);
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -163,16 +143,16 @@ export default function ChatPage() {
               {isAdministrator
                 ? "Publish assignments, watch class momentum, and jump into the conversations that need you."
                 : isParent
-                  ? "Keep up with upcoming assignments and the progress your approved students have made."
+                  ? "Keep up with approved students’ progress and add outside-school work when they need everything in one plan."
                   : "Open a streak, finish today's step, and snap your progress before the day is over."}
             </p>
           </div>
 
           <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
-          {canCreateIndependentAssignment && (
+          {canCreatePersonalAssignment && (
             <Dialog open={openIndependentModal} onOpenChange={setOpenIndependentModal}>
               <DialogTrigger render={<Button className="h-12 rounded-full border-2 border-black bg-[#c7b7ff] px-5 font-black text-black shadow-[3px_3px_0_#111] hover:bg-[#b7a4ff]" />}>
-                <Plus /> Add assignment
+                <Plus /> Add personal work
               </DialogTrigger>
               <CreateIndependentAssignmentModal setOpen={setOpenIndependentModal} />
             </Dialog>

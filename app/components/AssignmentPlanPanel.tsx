@@ -41,7 +41,9 @@ export function AssignmentPlanPanel({
   const isAssessment = ["exam", "quiz", "test"].includes(
     channel.data?.assignment_kind ?? "",
   );
-  const isIndependentAssignment = channel.data?.assignment_source === "independent";
+  const isPersonalAssignment =
+    channel.data?.assignment_source === "personal" ||
+    channel.data?.assignment_source === "independent";
   const effectiveCompletedDays = completedDays ?? channel.data?.completed_work_days;
   const currentTaskIndex = Math.min(
     effectiveCompletedDays ?? 0,
@@ -86,7 +88,7 @@ export function AssignmentPlanPanel({
           </p>
           {role === "student" ? (
             <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-xs leading-5 text-red-900">
-              <li>{isIndependentAssignment ? "Review what remains and choose the most urgent unfinished part." : "Message your teacher today, explain what is unfinished, and ask what to prioritize."}</li>
+              <li>{isPersonalAssignment ? "Review what remains and choose the most urgent unfinished part." : "Message your teacher today, explain what is unfinished, and ask what to prioritize."}</li>
               <li>Upload evidence of everything you have completed so the plan can be recalibrated.</li>
               <li>Complete the next remaining task as soon as possible and submit another progress update.</li>
             </ol>
@@ -95,7 +97,7 @@ export function AssignmentPlanPanel({
               Contact the student, review their latest evidence, and agree on an immediate completion plan or adjusted deadline.
             </p>
           )}
-          {onOpenMessages && !isIndependentAssignment && (
+          {onOpenMessages && !isPersonalAssignment && (
             <button
               className="mt-3 flex items-center gap-1.5 rounded-full border-2 border-black bg-red-600 px-3 py-2 text-xs font-black text-white shadow-[2px_2px_0_#111] hover:bg-red-700"
               onClick={onOpenMessages}

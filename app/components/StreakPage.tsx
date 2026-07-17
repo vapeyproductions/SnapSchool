@@ -97,10 +97,22 @@ function AuthenticatedStreakPage({
     const addedSubscription = client.on("notification.added_to_channel", () => {
       void loadAssignments();
     });
+    const deletedSubscription = client.on("channel.deleted", (event) => {
+      if (!event.cid) return;
+      setAssignmentChannels((current) => current.filter((channel) => channel.cid !== event.cid));
+    });
+    const personalDeleted = (event: Event) => {
+      const cid = (event as CustomEvent<{ cid?: string }>).detail?.cid;
+      if (!cid) return;
+      setAssignmentChannels((current) => current.filter((channel) => channel.cid !== cid));
+    };
+    window.addEventListener("snapschool:assignment-deleted", personalDeleted);
     return () => {
       cancelled = true;
       updateSubscription.unsubscribe();
       addedSubscription.unsubscribe();
+      deletedSubscription.unsubscribe();
+      window.removeEventListener("snapschool:assignment-deleted", personalDeleted);
     };
   }, [client, sort, user.uid]);
 

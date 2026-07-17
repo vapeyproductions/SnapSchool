@@ -1,10 +1,11 @@
 "use client";
 
 import type { User } from "firebase/auth";
-import { CalendarDays, CheckCircle2, Clock3, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
+import { CalendarDays, CheckCircle2, Clock3, Loader2, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { getParentDashboard, type ParentChildDashboard } from "@/actions/profile";
+import { deletePublishedAssignment } from "@/actions/stream";
 
 const formatDate = (date: string) => date
   ? new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
@@ -14,6 +15,7 @@ export default function ParentDashboard({ user }: { user: User }) {
   const [children, setChildren] = useState<ParentChildDashboard[]>([]);
   const [selectedChildUid, setSelectedChildUid] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [deletingCid, setDeletingCid] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
   const loadDashboard = async () => {
@@ -28,6 +30,24 @@ export default function ParentDashboard({ user }: { user: User }) {
       setErrorMessage(result.error ?? "Unable to load family dashboard");
     }
     setIsLoading(false);
+  };
+
+  const deletePersonalAssignment = async (cid: string, title: string) => {
+    if (!window.confirm(`Delete “${title}”? This removes its plan and submitted progress permanently.`)) return;
+    setDeletingCid(cid);
+    setErrorMessage("");
+    try {
+      const result = await deletePublishedAssignment({
+        channelCids: [cid],
+        firebaseIdToken: await user.getIdToken(),
+      });
+      if (!result.success) throw new Error(result.error ?? "Unable to delete the assignment");
+      await loadDashboard();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Unable to delete the assignment");
+    } finally {
+      setDeletingCid("");
+    }
   };
 
   useEffect(() => {
@@ -69,8 +89,8 @@ export default function ParentDashboard({ user }: { user: User }) {
     <div className="min-h-[34rem] bg-[#f4f0e8]">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-black bg-white p-4">
         <div>
-          <p className="flex items-center gap-2 font-black"><ShieldCheck className="size-5 text-[#7b61ff]" /> Read-only family dashboard</p>
-          <p className="mt-1 text-xs text-zinc-500">See approved students&apos; deadlines and progress. Parents cannot submit streak evidence or enter assignment chats.</p>
+          <p className="flex items-center gap-2 font-black"><ShieldCheck className="size-5 text-[#7b61ff]" /> Family progress dashboard</p>
+          <p className="mt-1 text-xs text-zinc-500">See approved students&apos; deadlines and progress. You can add personal work, but only students can submit streak evidence.</p>
         </div>
         <button className="flex items-center gap-2 rounded-full border-2 border-black bg-white px-4 py-2 text-xs font-black" onClick={() => void loadDashboard()} type="button"><RefreshCw className="size-4" /> Refresh</button>
       </div>
@@ -116,6 +136,12 @@ export default function ParentDashboard({ user }: { user: User }) {
                     {assignment.currentMission && !complete && <p className="mt-3 rounded-xl bg-white/80 p-3 text-sm"><strong>Current mission:</strong> {assignment.currentMission}</p>}
                     {assignment.lastProgressSummary && <p className="mt-2 text-xs leading-5 text-zinc-700"><strong>Latest reviewed progress:</strong> {assignment.lastProgressSummary}</p>}
                     {assignment.remainingWorkSummary && <p className="mt-2 text-xs leading-5 text-zinc-700"><strong>Still to do:</strong> {assignment.remainingWorkSummary}</p>}
+                    {(assignment.source === "personal" || assignment.source === "independent") && assignment.createdById === user.uid && (
+                      <button className="mt-3 flex items-center gap-1.5 rounded-full border-2 border-red-700 bg-white px-3 py-1.5 text-xs font-black text-red-700 disabled:opacity-50" disabled={deletingCid === assignment.id} onClick={() => void deletePersonalAssignment(assignment.id, assignment.title)} type="button">
+                        {deletingCid === assignment.id ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+                        {deletingCid === assignment.id ? "Deleting…" : "Delete personal assignment"}
+                      </button>
+                    )}
                   </article>
                 );
               })}

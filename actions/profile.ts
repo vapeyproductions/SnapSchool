@@ -35,12 +35,14 @@ export type ParentAssignmentSummary = {
   assignmentType: "group" | "individual";
   className: string;
   completedSteps: number;
+  createdById: string;
   currentMission: string | null;
   dueDate: string;
   id: string;
   lastProgressSummary: string | null;
   progressPercent: number;
   remainingWorkSummary: string | null;
+  source: "independent" | "personal" | "school";
   targetSteps: number;
   title: string;
 };
@@ -221,21 +223,57 @@ export const getProfileSettings = async (idToken: string) => {
   }
 };
 
-export const getAssignableIndependentStudents = async (idToken: string) => {
+type PersonalAssignmentStudent = {
+  classNames: string[];
+  uid: string;
+  username: string;
+};
+
+const addKnownClasses = async (
+  students: Array<{ uid: string; username: string }>,
+): Promise<PersonalAssignmentStudent[]> => {
+  const apiKey = process.env.NEXT_PUBLIC_STREAM_API_KEY;
+  const secret = process.env.STREAM_SECRET_KEY;
+  if (!apiKey || !secret) return students.map((student) => ({ ...student, classNames: [] }));
+
+  const streamClient = StreamChat.getInstance(apiKey, secret);
+  return Promise.all(students.map(async (student) => {
+    try {
+      const [individual, group] = await Promise.all([
+        streamClient.queryChannels(
+          { members: { $in: [student.uid] }, type: "messaging" },
+          {},
+          { limit: 30, state: false, watch: false },
+        ),
+        streamClient.queryChannels(
+          { members: { $in: [student.uid] }, type: "livestream" },
+          {},
+          { limit: 30, state: false, watch: false },
+        ),
+      ]);
+      const classNames = [...new Set([...individual, ...group]
+        .map((channel) => channel.data?.class_name?.trim())
+        .filter((name): name is string => Boolean(name)))]
+        .sort((first, second) => first.localeCompare(second));
+      return { ...student, classNames };
+    } catch {
+      return { ...student, classNames: [] };
+    }
+  }));
+};
+
+export const getAssignablePersonalStudents = async (idToken: string) => {
   try {
     const caller = await authenticate(idToken);
     if (caller.role === "student") {
-      if (caller.studentMode !== "independent") {
-        throw new Error("School-connected students receive assignments from their administrators");
-      }
       return {
         error: null,
-        students: [{ uid: caller.uid, username: caller.username }],
+        students: await addKnownClasses([{ uid: caller.uid, username: caller.username }]),
         success: true as const,
       };
     }
     if (caller.role !== "parent") {
-      throw new Error("This account cannot create independent assignments");
+      throw new Error("This account cannot create personal assignments");
     }
     const connections = (await queryConnections(idToken, "parentUid", caller.uid))
       .filter((connection) => connection.status === "approved");
@@ -244,13 +282,13 @@ export const getAssignableIndependentStudents = async (idToken: string) => {
         getProfileByUid(idToken, connection.studentUid, connection.studentUsername),
       ),
     ))
-      .filter((student) => student.role === "student" && student.studentMode === "independent")
+      .filter((student) => student.role === "student")
       .map((student) => ({ uid: student.uid, username: student.username }));
-    return { error: null, students, success: true as const };
+    return { error: null, students: await addKnownClasses(students), success: true as const };
   } catch (error) {
     return {
-      error: error instanceof Error ? error.message : "Unable to load independent students",
-      students: [] as Array<{ uid: string; username: string }>,
+      error: error instanceof Error ? error.message : "Unable to load students",
+      students: [] as PersonalAssignmentStudent[],
       success: false as const,
     };
   }
@@ -402,12 +440,14 @@ export const getParentDashboard = async (firebaseIdToken: string) => {
             assignmentType: channel.data?.assignment_type === "group" ? "group" : "individual",
             className: channel.data?.class_name ?? "Class",
             completedSteps,
+            createdById: channel.data?.created_by_id ?? "",
             currentMission: parseDailyMission(channel.data?.daily_plan, completedSteps),
             dueDate: channel.data?.due_date ?? "",
             id: channel.cid,
             lastProgressSummary: channel.data?.last_progress_summary ?? null,
             progressPercent: targetSteps > 0 ? Math.min(100, Math.round((completedSteps / targetSteps) * 100)) : 0,
             remainingWorkSummary: channel.data?.remaining_work_summary ?? null,
+            source: channel.data?.assignment_source ?? "school",
             targetSteps,
             title: channel.data?.assignment_title ?? "Assignment",
           };

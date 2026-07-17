@@ -1038,7 +1038,8 @@ export const createClassAssignment = async (data: {
   }
 };
 
-export const createIndependentAssignment = async (data: {
+export const createPersonalAssignment = async (data: {
+  className: string;
   firebaseIdToken: string;
   plan: AssignmentPlan;
   requestId: string;
@@ -1051,8 +1052,8 @@ export const createIndependentAssignment = async (data: {
       ? creator
       : await getProfileByUid(data.firebaseIdToken, data.targetStudentUid);
 
-    if (student.role !== "student" || student.studentMode !== "independent") {
-      throw new Error("Independent assignments can only be added to independent student accounts");
+    if (student.role !== "student") {
+      throw new Error("Personal assignments can only be added to student accounts");
     }
     if (creator.role === "student" && creator.uid !== student.uid) {
       throw new Error("Students can only create assignments for themselves");
@@ -1084,29 +1085,15 @@ export const createIndependentAssignment = async (data: {
       }
     }
 
-    // A school-linked Stream assignment is an additional safety check in case
-    // an older profile was incorrectly marked independent.
-    const [schoolMessaging, schoolGroups] = await Promise.all([
-      serverClient.queryChannels(
-        { members: { $in: [student.uid] }, type: "messaging" },
-        {},
-        { limit: 30, state: false, watch: false },
-      ),
-      serverClient.queryChannels(
-        { members: { $in: [student.uid] }, type: "livestream" },
-        {},
-        { limit: 30, state: false, watch: false },
-      ),
-    ]);
-    if ([...schoolMessaging, ...schoolGroups].some((channel) => channel.data?.class_id)) {
-      throw new Error("This student is connected to a school and cannot create independent assignments");
-    }
-
     const title = data.title.trim();
+    const className = data.className.trim();
     const planData = validateAssignmentPlan(data.plan);
     const requestId = data.requestId.replaceAll("-", "").toLowerCase();
     if (title.length < 3 || title.length > 100) {
       throw new Error("Assignment titles must be between 3 and 100 characters");
+    }
+    if (className.length < 2 || className.length > 60) {
+      throw new Error("Class names must be between 2 and 60 characters");
     }
     if (!/^[a-f0-9]{32}$/.test(requestId)) {
       throw new Error("This assignment request is invalid. Close the form and try again.");
@@ -1118,13 +1105,13 @@ export const createIndependentAssignment = async (data: {
       .slice(0, 25) || "assignment";
     const channel = serverClient.channel(
       "messaging",
-      `independent-${slug}-${requestId.slice(0, 12)}`,
+      `personal-${slug}-${requestId.slice(0, 12)}`,
       {
         ...planData,
-        assignment_source: "independent",
+        assignment_source: "personal",
         assignment_title: title,
         assignment_type: "individual",
-        class_name: "Independent study",
+        class_name: className,
         created_by_id: creator.uid,
         members: [student.uid],
         name: `${title} · ${student.username}`,
@@ -1135,7 +1122,7 @@ export const createIndependentAssignment = async (data: {
     return { error: null, success: true };
   } catch (error) {
     return {
-      error: error instanceof Error ? error.message : "Unable to create the independent assignment",
+      error: error instanceof Error ? error.message : "Unable to create the personal assignment",
       success: false,
     };
   }
@@ -1641,10 +1628,41 @@ export const deletePublishedAssignment = async (data: {
   firebaseIdToken: string;
 }) => {
   try {
-    const channels = await loadAuthorizedAssignmentChannels(
-      data.firebaseIdToken,
-      data.channelCids,
+    const creator = await authenticateCaller(data.firebaseIdToken);
+    const cids = [...new Set(data.channelCids)];
+    if (
+      cids.length === 0 ||
+      cids.length > 100 ||
+      cids.some((cid) => !/^(messaging|livestream):[a-zA-Z0-9_-]{1,100}$/.test(cid))
+    ) {
+      throw new Error("Select a valid assignment");
+    }
+
+    const channels = await Promise.all(
+      cids.map(async (cid) => {
+        const separator = cid.indexOf(":");
+        const type = cid.slice(0, separator);
+        const id = cid.slice(separator + 1);
+        const channel = serverClient.channel(type, id);
+        const response = await channel.query();
+        return { channel, data: response.channel };
+      }),
     );
+
+    if (channels.some(({ data: channelData }) => channelData.created_by_id !== creator.uid)) {
+      throw new Error("Only the person who created this assignment can delete it");
+    }
+    if (
+      creator.role !== "administrator" &&
+      channels.some(
+        ({ data: channelData }) =>
+          channelData.assignment_source !== "personal" &&
+          channelData.assignment_source !== "independent",
+      )
+    ) {
+      throw new Error("Only an administrator can delete a school assignment");
+    }
+
     await Promise.all(channels.map(({ channel }) => channel.delete()));
 
     return { deletedCount: channels.length, error: null, success: true };

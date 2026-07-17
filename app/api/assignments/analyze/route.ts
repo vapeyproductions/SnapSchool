@@ -64,20 +64,19 @@ const requireAssignmentPlanner = async (
     fields?: Record<string, { stringValue?: string }>;
   };
   const role = profile.fields?.role?.stringValue;
-  const studentMode = profile.fields?.studentMode?.stringValue;
 
   if (!profileResponse.ok || profile.fields?.uid?.stringValue !== account.localId) {
     throw new Error("Your SnapSchool profile could not be verified");
   }
   if (role === "administrator") return account.localId;
   if (role === "student") {
-    if (studentMode !== "independent" || (targetStudentUid && targetStudentUid !== account.localId)) {
-      throw new Error("School-connected students receive assignments from their administrators");
+    if (targetStudentUid && targetStudentUid !== account.localId) {
+      throw new Error("Students can only plan assignments for themselves");
     }
     return account.localId;
   }
   if (role !== "parent" || !targetStudentUid) {
-    throw new Error("This account cannot analyze independent assignments");
+    throw new Error("This account cannot analyze personal assignments");
   }
 
   const studentResponse = await fetch(
@@ -90,10 +89,9 @@ const requireAssignmentPlanner = async (
   };
   if (
     !studentResponse.ok ||
-    studentProfile.fields?.role?.stringValue !== "student" ||
-    studentProfile.fields?.studentMode?.stringValue !== "independent"
+    studentProfile.fields?.role?.stringValue !== "student"
   ) {
-    throw new Error("Parents can only plan work for an approved independent student");
+    throw new Error("Parents can only plan work for an approved student account");
   }
   const connectionId = `${account.localId}_${targetStudentUid}`;
   const connectionResponse = await fetch(

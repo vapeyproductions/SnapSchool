@@ -3,14 +3,14 @@
 import { CalendarDays, FileText, Loader2, Sparkles, UserRound } from "lucide-react";
 import { type Dispatch, useContext, useEffect, useState } from "react";
 
-import { getAssignableIndependentStudents } from "@/actions/profile";
-import { createIndependentAssignment } from "@/actions/stream";
+import { getAssignablePersonalStudents } from "@/actions/profile";
+import { createPersonalAssignment } from "@/actions/stream";
 import { DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { AssignmentAnalysis } from "@/lib/assignment-analysis";
 
 import AuthContext from "./AuthContext";
 
-type AssignableStudent = { uid: string; username: string };
+type AssignableStudent = { classNames: string[]; uid: string; username: string };
 
 export default function CreateIndependentAssignmentModal({
   setOpen,
@@ -23,6 +23,7 @@ export default function CreateIndependentAssignmentModal({
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [className, setClassName] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [analysis, setAnalysis] = useState<AssignmentAnalysis | null>(null);
   const [title, setTitle] = useState("");
@@ -35,20 +36,20 @@ export default function CreateIndependentAssignmentModal({
     if (!user || (role !== "student" && role !== "parent")) return;
     let active = true;
     user.getIdToken()
-      .then((firebaseIdToken) => getAssignableIndependentStudents(firebaseIdToken))
+      .then((firebaseIdToken) => getAssignablePersonalStudents(firebaseIdToken))
       .then((result) => {
         if (!active) return;
         if (result.success) {
           setStudents(result.students);
           setTargetStudentUid(result.students[0]?.uid ?? "");
         } else {
-          setErrorMessage(result.error ?? "Unable to load independent students");
+          setErrorMessage(result.error ?? "Unable to load students");
         }
         setIsLoading(false);
       })
       .catch(() => {
         if (!active) return;
-        setErrorMessage("Unable to load independent students");
+        setErrorMessage("Unable to load students");
         setIsLoading(false);
       });
     return () => { active = false; };
@@ -92,7 +93,8 @@ export default function CreateIndependentAssignmentModal({
     setIsCreating(true);
     setErrorMessage("");
     try {
-      const result = await createIndependentAssignment({
+      const result = await createPersonalAssignment({
+        className,
         firebaseIdToken: await user.getIdToken(),
         plan: {
           assignmentKind: analysis.assignmentKind,
@@ -122,9 +124,9 @@ export default function CreateIndependentAssignmentModal({
   return (
     <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl border-2 border-black sm:max-w-2xl">
       <DialogHeader>
-        <DialogTitle>Add an independent assignment</DialogTitle>
+        <DialogTitle>Add a personal assignment</DialogTitle>
         <DialogDescription>
-          Upload or describe the work once. AI will estimate the effort and turn it into manageable daily streak missions.
+          Add outside-school or extra work. AI will turn it into manageable daily streak missions alongside school assignments.
         </DialogDescription>
       </DialogHeader>
 
@@ -133,20 +135,40 @@ export default function CreateIndependentAssignmentModal({
       ) : students.length === 0 ? (
         <p className="rounded-xl border-2 border-amber-500 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
           {role === "parent"
-            ? "No approved independent students are connected to this parent account. The student must choose independent use and approve your parent request."
-            : "This school-connected account receives assignments from its administrators and cannot add independent work."}
+            ? "No approved students are connected to this parent account. The student must approve your parent request in Profile Settings."
+            : "This account cannot add a personal assignment right now."}
         </p>
       ) : (
         <form className="space-y-5" onSubmit={publish}>
           <label className="block space-y-2 text-sm font-medium">
             <span className="flex items-center gap-2"><UserRound className="size-4" /> Assignment for</span>
             {role === "parent" ? (
-              <select className="w-full rounded-xl border-2 border-black bg-white px-3 py-2.5 capitalize" onChange={(event) => { setTargetStudentUid(event.target.value); setAnalysis(null); }} required value={targetStudentUid}>
+              <select className="w-full rounded-xl border-2 border-black bg-white px-3 py-2.5 capitalize" onChange={(event) => { setTargetStudentUid(event.target.value); setClassName(""); setAnalysis(null); }} required value={targetStudentUid}>
                 {students.map((student) => <option key={student.uid} value={student.uid}>{student.username}</option>)}
               </select>
             ) : (
               <p className="rounded-xl border-2 border-black bg-[#fffbd5] px-3 py-2.5 font-black capitalize">{selectedStudent?.username}</p>
             )}
+          </label>
+
+          <label className="block space-y-2 text-sm font-medium">
+            Class or subject
+            <input
+              className="w-full rounded-xl border-2 border-black bg-white px-3 py-2.5"
+              list="personal-class-names"
+              maxLength={60}
+              minLength={2}
+              onChange={(event) => setClassName(event.target.value)}
+              placeholder="Example: Algebra, English, Piano"
+              required
+              value={className}
+            />
+            <datalist id="personal-class-names">
+              {selectedStudent?.classNames.map((name) => <option key={name} value={name} />)}
+            </datalist>
+            <span className="block text-xs font-normal leading-5 text-zinc-500">
+              Reuse an existing class name or type a new one. This keeps personal work organized without creating a separate class dashboard.
+            </span>
           </label>
 
           <section className="space-y-4 rounded-2xl border-2 border-black bg-indigo-50 p-4">
@@ -165,7 +187,7 @@ export default function CreateIndependentAssignmentModal({
               <div className="grid grid-cols-2 gap-3 text-sm"><div className="rounded-xl bg-white p-3"><span className="block text-zinc-500">Estimated effort</span><strong>{analysis.estimatedTotalMinutes} min</strong></div><div className="rounded-xl bg-white p-3"><span className="block text-zinc-500">Streak plan</span><strong>{analysis.recommendedWorkDays} days</strong></div></div>
               <p className="text-sm leading-6 text-zinc-700">{analysis.assignmentSummary}</p>
               <details className="rounded-xl bg-white p-3"><summary className="cursor-pointer font-black">Review daily missions</summary><ol className="mt-3 space-y-2">{analysis.dailyTasks.map((task) => <li className="rounded-xl bg-zinc-100 p-3 text-sm" key={task.dayNumber}><strong>Day {task.dayNumber}: {task.title}</strong><span className="float-right text-zinc-500">{task.estimatedMinutes} min</span><p className="mt-1 text-zinc-600">{task.description}</p></li>)}</ol></details>
-              <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-black text-white disabled:opacity-60" disabled={isCreating || !title.trim() || !dueDate} type="submit">{isCreating && <Loader2 className="size-4 animate-spin" />}{isCreating ? "Adding assignment…" : `Add to ${selectedStudent?.username ?? "student"}`}</button>
+              <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-black text-white disabled:opacity-60" disabled={isCreating || !title.trim() || !className.trim() || !dueDate} type="submit">{isCreating && <Loader2 className="size-4 animate-spin" />}{isCreating ? "Adding assignment…" : `Add to ${selectedStudent?.username ?? "student"}`}</button>
             </section>
           )}
           {errorMessage && <p className="rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{errorMessage}</p>}
