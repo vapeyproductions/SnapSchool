@@ -2,6 +2,7 @@
 
 import { StreamChat } from "stream-chat";
 
+import type { AssignmentTask } from "@/lib/assignment-analysis";
 import type { AccountRole } from "@/lib/server";
 
 type FirestoreValue = {
@@ -33,10 +34,12 @@ export type FamilyConnection = {
 
 export type ParentAssignmentSummary = {
   assignmentType: "group" | "individual";
+  classId: string;
   className: string;
   completedSteps: number;
   createdById: string;
   currentMission: string | null;
+  dailyPlan: AssignmentTask[];
   dueDate: string;
   id: string;
   lastProgressSummary: string | null;
@@ -418,6 +421,24 @@ const parseDailyMission = (value: unknown, completedSteps: number) => {
   }
 };
 
+const parseDailyPlan = (value: unknown): AssignmentTask[] => {
+  if (typeof value !== "string") return [];
+  try {
+    const tasks = JSON.parse(value) as AssignmentTask[];
+    return Array.isArray(tasks)
+      ? tasks.filter(
+          (task) =>
+            typeof task?.dayNumber === "number" &&
+            typeof task?.description === "string" &&
+            typeof task?.estimatedMinutes === "number" &&
+            typeof task?.title === "string",
+        )
+      : [];
+  } catch {
+    return [];
+  }
+};
+
 const queryAllStudentChannels = async (
   streamClient: StreamChat,
   studentUid: string,
@@ -536,10 +557,12 @@ export const getParentDashboard = async (firebaseIdToken: string) => {
           const targetSteps = channel.data?.recommended_work_days ?? 0;
           return {
             assignmentType: channel.data?.assignment_type === "group" ? "group" : "individual",
+            classId: channel.data?.class_id ?? "",
             className: channel.data?.class_name ?? "Class",
             completedSteps,
             createdById: channel.data?.created_by_id ?? "",
             currentMission: parseDailyMission(channel.data?.daily_plan, completedSteps),
+            dailyPlan: parseDailyPlan(channel.data?.daily_plan),
             dueDate: channel.data?.due_date ?? "",
             id: channel.cid,
             lastProgressSummary: channel.data?.last_progress_summary ?? null,

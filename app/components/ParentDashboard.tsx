@@ -1,11 +1,12 @@
 "use client";
 
 import type { User } from "firebase/auth";
-import { CalendarDays, CheckCircle2, Clock3, Loader2, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
+import { CalendarDays, CheckCircle2, Clock3, ListChecks, Loader2, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { getParentDashboard, type ParentChildDashboard } from "@/actions/profile";
 import { deletePublishedAssignment } from "@/actions/stream";
+import AssignmentCalendar from "./AssignmentCalendar";
 
 const formatDate = (date: string) => date
   ? new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
@@ -17,6 +18,8 @@ export default function ParentDashboard({ user }: { user: User }) {
   const [isLoading, setIsLoading] = useState(true);
   const [deletingCid, setDeletingCid] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [dashboardView, setDashboardView] = useState<"assignments" | "calendar">("calendar");
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState("");
 
   const loadDashboard = async () => {
     const firebaseIdToken = await user.getIdToken();
@@ -120,12 +123,56 @@ export default function ParentDashboard({ user }: { user: User }) {
               <p className="text-2xl font-black capitalize">{selectedChild?.studentUsername}&apos;s assignments</p>
               <p className="text-sm text-zinc-500">Progress updates appear after the student submits evidence and the AI reviews it.</p>
             </div>
+            <div className="mb-4 flex flex-wrap gap-2">
+              <button
+                className={`flex items-center gap-2 rounded-full border-2 border-black px-4 py-2 text-sm font-black ${dashboardView === "calendar" ? "bg-[#fffc00] shadow-[2px_2px_0_#111]" : "bg-white"}`}
+                onClick={() => setDashboardView("calendar")}
+                type="button"
+              >
+                <CalendarDays className="size-4" /> Calendar
+              </button>
+              <button
+                className={`flex items-center gap-2 rounded-full border-2 border-black px-4 py-2 text-sm font-black ${dashboardView === "assignments" ? "bg-[#c7b7ff] shadow-[2px_2px_0_#111]" : "bg-white"}`}
+                onClick={() => setDashboardView("assignments")}
+                type="button"
+              >
+                <ListChecks className="size-4" /> Assignment progress
+              </button>
+            </div>
+            {dashboardView === "calendar" ? (
+              <AssignmentCalendar
+                assignments={(selectedChild?.assignments ?? [])
+                  .filter((assignment) => assignment.progressPercent < 100)
+                  .map((assignment) => ({
+                    classId: assignment.classId,
+                    className: assignment.className,
+                    completedSteps: assignment.completedSteps,
+                    currentMission: assignment.currentMission,
+                    dailyPlan: assignment.dailyPlan,
+                    dueDate: assignment.dueDate,
+                    id: assignment.id,
+                    targetSteps: assignment.targetSteps,
+                    title: assignment.title,
+                  }))}
+                emptyMessage={`${selectedChild?.studentUsername ?? "This student"} has no active assignments scheduled.`}
+                onAssignmentSelect={(assignmentId) => {
+                  setSelectedAssignmentId(assignmentId);
+                  setDashboardView("assignments");
+                  window.setTimeout(() => {
+                    document.getElementById(`parent-assignment-${assignmentId}`)?.scrollIntoView({
+                      behavior: "smooth",
+                      block: "center",
+                    });
+                  }, 0);
+                }}
+              />
+            ) : (
             <div className="grid gap-3 lg:grid-cols-2">
               {selectedChild?.assignments.map((assignment) => {
                 const overdue = assignment.dueDate && assignment.dueDate < today && assignment.progressPercent < 100;
                 const complete = assignment.progressPercent === 100;
                 return (
-                  <article className={`rounded-2xl border-2 border-black p-4 shadow-[4px_4px_0_#111] ${overdue ? "bg-red-100" : complete ? "bg-emerald-100" : "bg-white"}`} key={assignment.id}>
+                  <article className={`rounded-2xl border-2 border-black p-4 shadow-[4px_4px_0_#111] ${selectedAssignmentId === assignment.id ? "ring-4 ring-[#7b61ff] ring-offset-2" : ""} ${overdue ? "bg-red-100" : complete ? "bg-emerald-100" : "bg-white"}`} id={`parent-assignment-${assignment.id}`} key={assignment.id}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0"><p className="truncate text-lg font-black">{assignment.title}</p><p className="mt-1 text-xs font-semibold text-zinc-500">{assignment.className} · {assignment.assignmentType}</p></div>
                       {complete ? <CheckCircle2 className="size-5 shrink-0 text-emerald-700" /> : overdue ? <span className="rounded-full bg-red-700 px-2 py-1 text-[10px] font-black text-white">OVERDUE</span> : null}
@@ -147,6 +194,7 @@ export default function ParentDashboard({ user }: { user: User }) {
               })}
               {selectedChild?.assignments.length === 0 && <p className="rounded-2xl border-2 border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-500 lg:col-span-2">No assignments have been published to this student yet.</p>}
             </div>
+            )}
           </section>
         </div>
       )}

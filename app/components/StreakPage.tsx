@@ -1,7 +1,7 @@
 "use client";
 
 import type { User } from "firebase/auth";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, CalendarDays, ListChecks, Loader2 } from "lucide-react";
 import {
   type Dispatch,
   type SetStateAction,
@@ -15,14 +15,17 @@ import type {
   ChannelFilters,
   ChannelSort,
 } from "stream-chat";
-import { Channel, Chat } from "stream-chat-react";
+import { Channel, Chat, useChatContext } from "stream-chat-react";
 
 import AdministratorClassDashboard from "./AdministratorClassDashboard";
+import AssignmentCalendar, { type CalendarAssignment } from "./AssignmentCalendar";
 import AuthContext from "./AuthContext";
 import ParentDashboard from "./ParentDashboard";
 import { ChannelContent } from "./ChannelContent";
 import { PriorityAssignmentList } from "./PriorityAssignmentList";
 import { useGetStreamClient } from "./useGetStreamClient";
+import type { AssignmentTask } from "@/lib/assignment-analysis";
+import { getAssignmentPriority } from "@/lib/assignment-priority";
 
 type StreakPageProps = {
   onDailyMinutesChange?: (minutes: number) => void;
@@ -41,6 +44,57 @@ function LoadingStreaks() {
   );
 }
 
+const parseDailyPlan = (value: unknown): AssignmentTask[] => {
+  if (typeof value !== "string") return [];
+  try {
+    const tasks = JSON.parse(value) as AssignmentTask[];
+    return Array.isArray(tasks) ? tasks : [];
+  } catch {
+    return [];
+  }
+};
+
+function StudentAssignmentCalendar({
+  channels,
+  onOpenAssignment,
+}: {
+  channels: StreamChannel[];
+  onOpenAssignment: () => void;
+}) {
+  const { setActiveChannel } = useChatContext("StudentAssignmentCalendar");
+  const assignments = useMemo<CalendarAssignment[]>(
+    () => channels
+      .filter((channel) => {
+        const data = channel.data ?? {};
+        return Boolean(data.assignment_title) && !getAssignmentPriority(data).completed;
+      })
+      .map((channel) => ({
+        classId: channel.data?.class_id ?? "",
+        className: channel.data?.class_name ?? "Individual",
+        completedSteps: channel.data?.completed_work_days ?? 0,
+        currentMission: null,
+        dailyPlan: parseDailyPlan(channel.data?.daily_plan),
+        dueDate: channel.data?.due_date ?? "",
+        id: channel.cid,
+        targetSteps: channel.data?.recommended_work_days ?? 0,
+        title: channel.data?.assignment_title ?? "Assignment",
+      })),
+    [channels],
+  );
+
+  return (
+    <AssignmentCalendar
+      assignments={assignments}
+      onAssignmentSelect={(assignmentId) => {
+        const channel = channels.find((candidate) => candidate.cid === assignmentId);
+        if (!channel) return;
+        setActiveChannel(channel);
+        onOpenAssignment();
+      }}
+    />
+  );
+}
+
 function AuthenticatedStreakPage({
   user,
   onDailyMinutesChange,
@@ -51,6 +105,7 @@ function AuthenticatedStreakPage({
   const [assignmentChannels, setAssignmentChannels] = useState<StreamChannel[]>([]);
   const [channelError, setChannelError] = useState("");
   const [mobileAssignmentOpen, setMobileAssignmentOpen] = useState(false);
+  const [dashboardView, setDashboardView] = useState<"assignments" | "calendar">("calendar");
   const filters: ChannelFilters = {
     members: { $in: [user.uid] },
     type: "messaging",
@@ -120,6 +175,33 @@ function AuthenticatedStreakPage({
 
   return (
     <Chat client={client}>
+      <div className="min-w-0 bg-white">
+        <div className="flex flex-wrap gap-2 border-b-2 border-black bg-white p-3">
+          <button
+            className={`flex items-center gap-2 rounded-full border-2 border-black px-4 py-2 text-sm font-black ${dashboardView === "calendar" ? "bg-[#fffc00] shadow-[2px_2px_0_#111]" : "bg-white"}`}
+            onClick={() => setDashboardView("calendar")}
+            type="button"
+          >
+            <CalendarDays className="size-4" /> Calendar
+          </button>
+          <button
+            className={`flex items-center gap-2 rounded-full border-2 border-black px-4 py-2 text-sm font-black ${dashboardView === "assignments" ? "bg-[#c7b7ff] shadow-[2px_2px_0_#111]" : "bg-white"}`}
+            onClick={() => setDashboardView("assignments")}
+            type="button"
+          >
+            <ListChecks className="size-4" /> Assignments
+          </button>
+        </div>
+
+        {dashboardView === "calendar" ? (
+          <StudentAssignmentCalendar
+            channels={assignmentChannels}
+            onOpenAssignment={() => {
+              setDashboardView("assignments");
+              setMobileAssignmentOpen(true);
+            }}
+          />
+        ) : (
       <div className="chat-container flex h-[66vh] min-h-[36rem] max-h-[52rem] min-w-0 overflow-hidden bg-white max-md:h-[calc(100dvh-11rem)] max-md:max-h-none max-md:min-h-[32rem] max-md:flex-col">
         <div
           className="mobile-assignment-list channel-list student-story-list w-80 shrink-0 overflow-y-auto border-r-2 border-black bg-[#f4f0e8] max-md:h-full max-md:w-full max-md:border-r-0"
@@ -166,6 +248,8 @@ function AuthenticatedStreakPage({
             />
           </Channel>
         </div>
+      </div>
+        )}
       </div>
     </Chat>
   );
