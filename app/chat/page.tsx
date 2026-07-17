@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Bell,
   BookOpen,
   Flame,
   LogOut,
@@ -18,6 +17,7 @@ import CreateIndependentAssignmentModal from "@/app/components/CreateIndependent
 import CreateStreakModal from "@/app/components/CreateStreakModal";
 import InstallAppButton from "@/app/components/InstallAppButton";
 import ManageClassesModal from "@/app/components/ManageClassesModal";
+import NotificationCenter from "@/app/components/NotificationCenter";
 import ProfileSettingsModal from "@/app/components/ProfileSettingsModal";
 import StreakPage from "@/app/components/StreakPage";
 import StreakReminderModal from "@/app/components/StreakReminderModal";
@@ -53,7 +53,13 @@ export default function ChatPage() {
     const result = await logoutUser();
 
     if (result.code === "auth/success") {
-      if (user) clearCachedAccountRole(user.uid);
+      if (user) {
+        clearCachedAccountRole(user.uid);
+        const notificationPrefix = `snapschool:notifications-shown:${user.uid}:`;
+        Object.keys(window.sessionStorage)
+          .filter((key) => key.startsWith(notificationPrefix))
+          .forEach((key) => window.sessionStorage.removeItem(key));
+      }
       router.replace("/login");
       return;
     }
@@ -87,13 +93,9 @@ export default function ChatPage() {
 
           <div className="flex items-center gap-2">
             {!isAdministrator && <InstallAppButton />}
-            <button
-              aria-label="Notifications"
-              className="hidden size-10 items-center justify-center rounded-full border-2 border-black bg-white transition hover:-translate-y-0.5 sm:flex"
-              type="button"
-            >
-              <Bell className="size-5" />
-            </button>
+            {!isAdministrator && user && role && (
+              <NotificationCenter role={role} user={user} />
+            )}
             <div className="flex size-10 items-center justify-center overflow-hidden rounded-full border-2 border-black bg-[#c7b7ff] text-sm font-black">
               {user?.photoURL ? (
                 // eslint-disable-next-line @next/next/no-img-element

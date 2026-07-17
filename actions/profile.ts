@@ -53,6 +53,17 @@ export type ParentChildDashboard = {
   studentUsername: string;
 };
 
+export type NotificationAssignmentSummary = {
+  assignmentKind: string;
+  completedSteps: number;
+  dueDate: string;
+  id: string;
+  studentUid: string;
+  studentUsername: string;
+  targetSteps: number;
+  title: string;
+};
+
 const firebaseConfig = () => {
   const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
   const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
@@ -404,6 +415,93 @@ const parseDailyMission = (value: unknown, completedSteps: number) => {
     return Array.isArray(tasks) ? tasks[Math.min(completedSteps, Math.max(0, tasks.length - 1))]?.title ?? null : null;
   } catch {
     return null;
+  }
+};
+
+const queryAllStudentChannels = async (
+  streamClient: StreamChat,
+  studentUid: string,
+  type: "livestream" | "messaging",
+) => {
+  const channels = [];
+  const pageSize = 30;
+  for (let offset = 0; offset < 300; offset += pageSize) {
+    const page = await streamClient.queryChannels(
+      { members: { $in: [studentUid] }, type },
+      { last_message_at: -1 },
+      { limit: pageSize, offset, state: false, watch: false },
+    );
+    channels.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return channels;
+};
+
+const getStudentNotificationAssignments = async (
+  streamClient: StreamChat,
+  studentUid: string,
+  studentUsername: string,
+): Promise<NotificationAssignmentSummary[]> => {
+  const [individual, group] = await Promise.all([
+    queryAllStudentChannels(streamClient, studentUid, "messaging"),
+    queryAllStudentChannels(streamClient, studentUid, "livestream"),
+  ]);
+
+  return [...individual, ...group]
+    .filter((channel) => Boolean(channel.data?.assignment_title && channel.data?.due_date))
+    .map((channel) => ({
+      assignmentKind: channel.data?.assignment_kind ?? "other",
+      completedSteps: channel.data?.completed_work_days ?? 0,
+      dueDate: channel.data?.due_date ?? "",
+      id: channel.cid,
+      studentUid,
+      studentUsername,
+      targetSteps: channel.data?.recommended_work_days ?? 0,
+      title: channel.data?.assignment_title ?? "Assignment",
+    }));
+};
+
+export const getDashboardNotificationAssignments = async (firebaseIdToken: string) => {
+  try {
+    const caller = await authenticate(firebaseIdToken);
+    if (caller.role !== "student" && caller.role !== "parent") {
+      throw new Error("Assignment reminders are available to students and parents");
+    }
+    const apiKey = process.env.NEXT_PUBLIC_STREAM_API_KEY;
+    const secret = process.env.STREAM_SECRET_KEY;
+    if (!apiKey || !secret) throw new Error("Stream server configuration is missing");
+    const streamClient = StreamChat.getInstance(apiKey, secret);
+
+    if (caller.role === "student") {
+      return {
+        assignments: await getStudentNotificationAssignments(
+          streamClient,
+          caller.uid,
+          caller.username,
+        ),
+        error: null,
+        success: true as const,
+      };
+    }
+
+    const connections = (await queryConnections(firebaseIdToken, "parentUid", caller.uid))
+      .filter((connection) => connection.status === "approved");
+    const assignments = (await Promise.all(
+      connections.map((connection) =>
+        getStudentNotificationAssignments(
+          streamClient,
+          connection.studentUid,
+          connection.studentUsername,
+        ),
+      ),
+    )).flat();
+    return { assignments, error: null, success: true as const };
+  } catch (error) {
+    return {
+      assignments: [] as NotificationAssignmentSummary[],
+      error: error instanceof Error ? error.message : "Unable to load assignment reminders",
+      success: false as const,
+    };
   }
 };
 
