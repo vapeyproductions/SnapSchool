@@ -7,7 +7,13 @@ import {
   Clock3,
   Flag,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import {
+  type FocusEvent,
+  type MouseEvent,
+  useMemo,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
 
 import type { AssignmentTask } from "@/lib/assignment-analysis";
 import { getClassColor } from "@/lib/assignment-priority";
@@ -29,6 +35,13 @@ type CalendarItem = {
   date: string;
   task: AssignmentTask | null;
   type: "deadline" | "mission";
+};
+
+type CalendarTooltip = {
+  color: ReturnType<typeof getClassColor>;
+  item: CalendarItem;
+  left: number;
+  top: number;
 };
 
 const DAY_MS = 86_400_000;
@@ -127,6 +140,7 @@ export default function AssignmentCalendar({
   const [visibleMonth, setVisibleMonth] = useState(
     () => new Date(today.getFullYear(), today.getMonth(), 1),
   );
+  const [tooltip, setTooltip] = useState<CalendarTooltip | null>(null);
   const todayKey = dateKey(today);
   const items = useMemo(
     () => assignments.flatMap((assignment) => buildCalendarItems(assignment, today)),
@@ -156,7 +170,27 @@ export default function AssignmentCalendar({
     );
   };
 
+  const showTooltip = (
+    event: MouseEvent<HTMLButtonElement> | FocusEvent<HTMLButtonElement>,
+    item: CalendarItem,
+    color: ReturnType<typeof getClassColor>,
+  ) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const tooltipWidth = 256;
+    const estimatedHeight = 210;
+    const left = Math.min(
+      Math.max(12, rect.left + rect.width / 2 - tooltipWidth / 2),
+      window.innerWidth - tooltipWidth - 12,
+    );
+    const below = rect.bottom + 8;
+    const top = below + estimatedHeight <= window.innerHeight
+      ? below
+      : Math.max(12, rect.top - estimatedHeight - 8);
+    setTooltip({ color, item, left, top });
+  };
+
   return (
+    <>
     <section className="min-w-0 bg-[#f4f0e8] p-3 sm:p-5">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -238,9 +272,13 @@ export default function AssignmentCalendar({
                         const isDeadline = item.type === "deadline";
                         return (
                           <button
-                            className="group relative w-full rounded-lg border-l-4 px-2 py-1.5 text-left text-[10px] font-bold leading-3.5 shadow-sm transition hover:z-20 hover:-translate-y-0.5 hover:ring-2 hover:ring-black"
+                            className="relative w-full rounded-lg border-l-4 px-2 py-1.5 text-left text-[10px] font-bold leading-3.5 shadow-sm transition hover:z-20 hover:-translate-y-0.5 hover:ring-2 hover:ring-black"
                             key={`${item.assignment.id}:${item.type}:${index}`}
+                            onBlur={() => setTooltip(null)}
                             onClick={() => onAssignmentSelect(item.assignment.id)}
+                            onFocus={(event) => showTooltip(event, item, color)}
+                            onMouseEnter={(event) => showTooltip(event, item, color)}
+                            onMouseLeave={() => setTooltip(null)}
                             style={{
                               backgroundColor: isDeadline ? "#fee2e2" : color.background,
                               borderLeftColor: isDeadline ? "#dc2626" : color.border,
@@ -254,23 +292,6 @@ export default function AssignmentCalendar({
                                 {isDeadline ? `Due: ${item.assignment.title}` : item.task?.title}
                               </span>
                             </span>
-                            <span className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 hidden w-64 -translate-x-1/2 rounded-xl border-2 border-black bg-white p-3 text-left text-xs font-medium leading-5 text-black shadow-[4px_4px_0_#111] group-hover:block group-focus-visible:block">
-                              <strong className="block text-sm font-black">{item.assignment.title}</strong>
-                              <span className="mt-0.5 block font-bold" style={{ color: color.text }}>
-                                {item.assignment.className}
-                              </span>
-                              {isDeadline ? (
-                                <span className="mt-2 block font-black text-red-700">Assignment due today</span>
-                              ) : (
-                                <>
-                                  <span className="mt-2 block font-black">Day {item.task?.dayNumber}: {item.task?.title}</span>
-                                  <span className="mt-1 block text-zinc-600">{item.task?.description}</span>
-                                  {Boolean(item.task?.estimatedMinutes) && (
-                                    <span className="mt-2 block font-black">About {item.task?.estimatedMinutes} minutes</span>
-                                  )}
-                                </>
-                              )}
-                            </span>
                           </button>
                         );
                       })}
@@ -283,5 +304,32 @@ export default function AssignmentCalendar({
         </div>
       )}
     </section>
+      {tooltip && typeof document !== "undefined" && createPortal(
+        <div
+          className="pointer-events-none fixed z-[100] w-64 rounded-xl border-2 border-black bg-white p-3 text-left text-xs font-medium leading-5 text-black shadow-[4px_4px_0_#111]"
+          role="tooltip"
+          style={{ left: tooltip.left, top: tooltip.top }}
+        >
+          <strong className="block text-sm font-black">{tooltip.item.assignment.title}</strong>
+          <span className="mt-0.5 block font-bold" style={{ color: tooltip.color.text }}>
+            {tooltip.item.assignment.className}
+          </span>
+          {tooltip.item.type === "deadline" ? (
+            <span className="mt-2 block font-black text-red-700">Assignment due today</span>
+          ) : (
+            <>
+              <span className="mt-2 block font-black">
+                Day {tooltip.item.task?.dayNumber}: {tooltip.item.task?.title}
+              </span>
+              <span className="mt-1 block text-zinc-600">{tooltip.item.task?.description}</span>
+              {Boolean(tooltip.item.task?.estimatedMinutes) && (
+                <span className="mt-2 block font-black">About {tooltip.item.task?.estimatedMinutes} minutes</span>
+              )}
+            </>
+          )}
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }

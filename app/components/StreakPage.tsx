@@ -1,7 +1,7 @@
 "use client";
 
 import type { User } from "firebase/auth";
-import { ArrowLeft, CalendarDays, ListChecks, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import {
   type Dispatch,
   type SetStateAction,
@@ -28,6 +28,8 @@ import type { AssignmentTask } from "@/lib/assignment-analysis";
 import { getAssignmentPriority } from "@/lib/assignment-priority";
 
 type StreakPageProps = {
+  dashboardView: "assignments" | "calendar";
+  onDashboardViewChange: (view: "assignments" | "calendar") => void;
   onDailyMinutesChange?: (minutes: number) => void;
   setReminderMessage: Dispatch<SetStateAction<string>>;
   setStreakReminder: Dispatch<SetStateAction<boolean>>;
@@ -97,6 +99,8 @@ function StudentAssignmentCalendar({
 
 function AuthenticatedStreakPage({
   user,
+  dashboardView,
+  onDashboardViewChange,
   onDailyMinutesChange,
   setReminderMessage,
   setStreakReminder,
@@ -105,7 +109,6 @@ function AuthenticatedStreakPage({
   const [assignmentChannels, setAssignmentChannels] = useState<StreamChannel[]>([]);
   const [channelError, setChannelError] = useState("");
   const [mobileAssignmentOpen, setMobileAssignmentOpen] = useState(false);
-  const [dashboardView, setDashboardView] = useState<"assignments" | "calendar">("calendar");
   const filters: ChannelFilters = {
     members: { $in: [user.uid] },
     type: "messaging",
@@ -176,28 +179,11 @@ function AuthenticatedStreakPage({
   return (
     <Chat client={client}>
       <div className="min-w-0 bg-white">
-        <div className="flex flex-wrap gap-2 border-b-2 border-black bg-white p-3">
-          <button
-            className={`flex items-center gap-2 rounded-full border-2 border-black px-4 py-2 text-sm font-black ${dashboardView === "calendar" ? "bg-[#fffc00] shadow-[2px_2px_0_#111]" : "bg-white"}`}
-            onClick={() => setDashboardView("calendar")}
-            type="button"
-          >
-            <CalendarDays className="size-4" /> Calendar
-          </button>
-          <button
-            className={`flex items-center gap-2 rounded-full border-2 border-black px-4 py-2 text-sm font-black ${dashboardView === "assignments" ? "bg-[#c7b7ff] shadow-[2px_2px_0_#111]" : "bg-white"}`}
-            onClick={() => setDashboardView("assignments")}
-            type="button"
-          >
-            <ListChecks className="size-4" /> Assignments
-          </button>
-        </div>
-
         {dashboardView === "calendar" ? (
           <StudentAssignmentCalendar
             channels={assignmentChannels}
             onOpenAssignment={() => {
-              setDashboardView("assignments");
+              onDashboardViewChange("assignments");
               setMobileAssignmentOpen(true);
             }}
           />
@@ -256,6 +242,8 @@ function AuthenticatedStreakPage({
 }
 
 export default function StreakPage({
+  dashboardView,
+  onDashboardViewChange,
   onDailyMinutesChange,
   setReminderMessage,
   setStreakReminder,
@@ -269,12 +257,20 @@ export default function StreakPage({
   }
 
   if (role === "parent") {
-    return <ParentDashboard user={user} />;
+    return (
+      <ParentDashboard
+        dashboardView={dashboardView}
+        onDashboardViewChange={onDashboardViewChange}
+        user={user}
+      />
+    );
   }
 
   return (
     <AuthenticatedStreakPage
       user={user}
+      dashboardView={dashboardView}
+      onDashboardViewChange={onDashboardViewChange}
       onDailyMinutesChange={onDailyMinutesChange}
       setReminderMessage={setReminderMessage}
       setStreakReminder={setStreakReminder}

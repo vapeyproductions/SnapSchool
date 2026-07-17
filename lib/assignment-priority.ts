@@ -51,7 +51,9 @@ const stableHue = (value: string) => {
 };
 
 export const getClassColor = (classId?: string, className?: string) => {
-  const key = classId || className || "independent-assignment";
+  // Class names are shared across school and personal assignments, while a
+  // parent-created assignment may not have the school's internal class ID.
+  const key = className?.trim().toLowerCase() || classId || "independent-assignment";
   const hue = stableHue(key);
 
   return {

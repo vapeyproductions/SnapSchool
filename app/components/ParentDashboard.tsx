@@ -1,7 +1,7 @@
 "use client";
 
 import type { User } from "firebase/auth";
-import { CalendarDays, CheckCircle2, Clock3, ListChecks, Loader2, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
+import { CalendarDays, CheckCircle2, Clock3, Loader2, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { getParentDashboard, type ParentChildDashboard } from "@/actions/profile";
@@ -12,13 +12,20 @@ const formatDate = (date: string) => date
   ? new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
   : "No due date";
 
-export default function ParentDashboard({ user }: { user: User }) {
+export default function ParentDashboard({
+  dashboardView,
+  onDashboardViewChange,
+  user,
+}: {
+  dashboardView: "assignments" | "calendar";
+  onDashboardViewChange: (view: "assignments" | "calendar") => void;
+  user: User;
+}) {
   const [children, setChildren] = useState<ParentChildDashboard[]>([]);
   const [selectedChildUid, setSelectedChildUid] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [deletingCid, setDeletingCid] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
-  const [dashboardView, setDashboardView] = useState<"assignments" | "calendar">("calendar");
   const [selectedAssignmentId, setSelectedAssignmentId] = useState("");
 
   const loadDashboard = async () => {
@@ -123,22 +130,6 @@ export default function ParentDashboard({ user }: { user: User }) {
               <p className="text-2xl font-black capitalize">{selectedChild?.studentUsername}&apos;s assignments</p>
               <p className="text-sm text-zinc-500">Progress updates appear after the student submits evidence and the AI reviews it.</p>
             </div>
-            <div className="mb-4 flex flex-wrap gap-2">
-              <button
-                className={`flex items-center gap-2 rounded-full border-2 border-black px-4 py-2 text-sm font-black ${dashboardView === "calendar" ? "bg-[#fffc00] shadow-[2px_2px_0_#111]" : "bg-white"}`}
-                onClick={() => setDashboardView("calendar")}
-                type="button"
-              >
-                <CalendarDays className="size-4" /> Calendar
-              </button>
-              <button
-                className={`flex items-center gap-2 rounded-full border-2 border-black px-4 py-2 text-sm font-black ${dashboardView === "assignments" ? "bg-[#c7b7ff] shadow-[2px_2px_0_#111]" : "bg-white"}`}
-                onClick={() => setDashboardView("assignments")}
-                type="button"
-              >
-                <ListChecks className="size-4" /> Assignment progress
-              </button>
-            </div>
             {dashboardView === "calendar" ? (
               <AssignmentCalendar
                 assignments={(selectedChild?.assignments ?? [])
@@ -157,7 +148,7 @@ export default function ParentDashboard({ user }: { user: User }) {
                 emptyMessage={`${selectedChild?.studentUsername ?? "This student"} has no active assignments scheduled.`}
                 onAssignmentSelect={(assignmentId) => {
                   setSelectedAssignmentId(assignmentId);
-                  setDashboardView("assignments");
+                  onDashboardViewChange("assignments");
                   window.setTimeout(() => {
                     document.getElementById(`parent-assignment-${assignmentId}`)?.scrollIntoView({
                       behavior: "smooth",

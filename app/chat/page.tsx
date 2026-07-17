@@ -2,7 +2,9 @@
 
 import {
   BookOpen,
+  CalendarDays,
   Flame,
+  ListChecks,
   LogOut,
   Plus,
   School,
@@ -37,6 +39,7 @@ export default function ChatPage() {
   const [streakReminder, setStreakReminder] = useState(false);
   const [reminderMessage, setReminderMessage] = useState("");
   const [dailyEstimatedMinutes, setDailyEstimatedMinutes] = useState(0);
+  const [dashboardView, setDashboardView] = useState<"assignments" | "calendar">("assignments");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
 
@@ -71,7 +74,7 @@ export default function ChatPage() {
   return (
     <div className="snapschool-shell min-h-screen text-[#171717]">
       <header className="sticky top-0 z-40 border-b-2 border-black bg-[#fffc00]">
-        <div className="mx-auto flex h-[4.5rem] max-w-[1540px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex min-h-[4.5rem] max-w-[1540px] flex-wrap items-center justify-between gap-3 px-4 py-2 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
             <div className="relative flex size-11 items-center justify-center rounded-full border-2 border-black bg-white shadow-[3px_3px_0_#111]">
               <BookOpen className="size-5" strokeWidth={2.5} />
@@ -86,8 +89,25 @@ export default function ChatPage() {
           </div>
 
           {!isAdministrator && (
-            <div className="hidden rounded-full border-2 border-black bg-black px-6 py-2 text-sm font-extrabold text-white md:block">
-              {isParent ? "Family progress" : "Assignments"}
+            <div className="order-3 mx-auto flex w-full items-center justify-center rounded-full border-2 border-black bg-white p-1 shadow-[2px_2px_0_#111] md:order-none md:mx-0 md:w-auto">
+              <button
+                aria-pressed={dashboardView === "assignments"}
+                className={`flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-black transition sm:px-4 sm:text-sm ${dashboardView === "assignments" ? "bg-black text-white" : "hover:bg-zinc-100"}`}
+                onClick={() => setDashboardView("assignments")}
+                type="button"
+              >
+                <ListChecks className="size-3.5 sm:size-4" />
+                <span>Assignments</span>
+              </button>
+              <button
+                aria-pressed={dashboardView === "calendar"}
+                className={`flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-black transition sm:px-4 sm:text-sm ${dashboardView === "calendar" ? "bg-[#fffc00] text-black" : "hover:bg-zinc-100"}`}
+                onClick={() => setDashboardView("calendar")}
+                type="button"
+              >
+                <CalendarDays className="size-3.5 sm:size-4" />
+                <span>Calendar</span>
+              </button>
             </div>
           )}
 
@@ -225,6 +245,8 @@ export default function ChatPage() {
 
           <div className="p-2 sm:p-4">
             <StreakPage
+              dashboardView={dashboardView}
+              onDashboardViewChange={setDashboardView}
               onDailyMinutesChange={setDailyEstimatedMinutes}
               setReminderMessage={setReminderMessage}
               setStreakReminder={setStreakReminder}
