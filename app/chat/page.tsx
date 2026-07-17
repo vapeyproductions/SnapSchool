@@ -105,7 +105,7 @@ export default function ChatPage() {
 
   return (
     <div className={`snapschool-shell min-h-screen text-[#171717] ${adultMode && canUseAdultMode ? "adult-mode" : ""}`}>
-      <header className="sticky top-0 z-40 border-b-2 border-black bg-[#fffc00]">
+      <header className="snapschool-header sticky top-0 z-40 border-b-2 border-black bg-[#fffc00]">
         <div className="mx-auto flex min-h-[4.5rem] max-w-[1540px] flex-wrap items-center justify-between gap-3 px-4 py-2 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
             <div className="relative flex size-11 items-center justify-center rounded-full border-2 border-black bg-white shadow-[3px_3px_0_#111]">
@@ -148,14 +148,14 @@ export default function ChatPage() {
               <button
                 aria-label="Toggle Adult mode"
                 aria-pressed={adultMode}
-                className={`flex h-10 items-center gap-2 rounded-full border-2 border-black px-2.5 text-xs font-black transition sm:px-3 ${adultMode ? "bg-slate-700 text-white" : "bg-white text-black hover:bg-slate-100"}`}
+                className={`adult-mode-toggle flex h-10 items-center gap-2 rounded-full border-2 border-black px-2.5 text-xs font-black transition sm:px-3 ${adultMode ? "bg-slate-700 text-white" : "bg-white text-black hover:bg-slate-100"}`}
                 onClick={toggleAdultMode}
                 type="button"
               >
                 <MoonStar className="size-4" />
                 <span className="hidden lg:inline">Adult mode</span>
                 <span className={`relative h-5 w-9 rounded-full border border-current ${adultMode ? "bg-slate-500" : "bg-slate-200"}`} aria-hidden="true">
-                  <span className={`absolute top-0.5 size-3.5 rounded-full bg-white shadow-sm transition-transform ${adultMode ? "translate-x-[1.05rem]" : "translate-x-0.5"}`} />
+                  <span className={`absolute left-0.5 top-0.5 size-3.5 rounded-full bg-white shadow-sm transition-transform ${adultMode ? "translate-x-4" : "translate-x-0"}`} />
                 </span>
               </button>
             )}
@@ -197,7 +197,7 @@ export default function ChatPage() {
           </p>
         )}
 
-        <section className="mb-5 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+        <section className="dashboard-intro mb-5 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
           <div>
             <div className="mb-3 flex items-center gap-2">
               <span className="rounded-full bg-black px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-white">

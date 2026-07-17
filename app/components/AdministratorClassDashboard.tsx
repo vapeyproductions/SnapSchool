@@ -182,7 +182,7 @@ function AssignmentManagement({
   user: User;
 }) {
   const [editOpen, setEditOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -241,7 +241,8 @@ function AssignmentManagement({
         return;
       }
       onDeleted(channelCids);
-      setDeleteOpen(false);
+      setConfirmDelete(false);
+      setEditOpen(false);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Unable to delete the assignment");
     } finally {
@@ -251,7 +252,7 @@ function AssignmentManagement({
 
   return (
     <div className="flex flex-wrap gap-2">
-      <Dialog open={editOpen} onOpenChange={(open) => { setEditOpen(open); setErrorMessage(""); }}>
+      <Dialog open={editOpen} onOpenChange={(open) => { setEditOpen(open); setConfirmDelete(false); setErrorMessage(""); }}>
         <DialogTrigger render={<Button className="rounded-full border-2 border-black bg-white px-3 font-black text-black hover:bg-zinc-100" />}>
           <Pencil className="size-4" /> Edit
         </DialogTrigger>
@@ -297,44 +298,49 @@ function AssignmentManagement({
                 <p className="mt-1 text-xs leading-5 text-red-700">
                   Only the creator can delete this assignment. Deletion removes it for every assigned {assignmentUnit}.
                 </p>
-                <Button
-                  className="mt-3 rounded-full border-2 border-red-700 bg-white px-3 font-black text-red-700 hover:bg-red-100"
-                  onClick={() => {
-                    setErrorMessage("");
-                    setEditOpen(false);
-                    setDeleteOpen(true);
-                  }}
-                  type="button"
-                >
-                  <Trash2 className="size-4" /> Delete assignment
-                </Button>
+                {confirmDelete ? (
+                  <div className="mt-3 rounded-lg border border-red-300 bg-white p-3">
+                    <p className="text-sm font-bold text-red-900">
+                      Delete “{assignment.title}” and all related progress and conversations?
+                    </p>
+                    <p className="mt-1 text-xs text-red-700">This action cannot be undone.</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button
+                        className="rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                        disabled={isDeleting}
+                        onClick={() => setConfirmDelete(false)}
+                        type="button"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        className="rounded-lg bg-red-700 font-black text-white hover:bg-red-800"
+                        disabled={isDeleting}
+                        onClick={() => void deleteAssignment()}
+                        type="button"
+                      >
+                        {isDeleting && <Loader2 className="size-4 animate-spin" />}
+                        {isDeleting ? "Deleting…" : "Yes, delete assignment"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button
+                    className="mt-3 rounded-lg border-2 border-red-700 bg-white px-3 font-black text-red-700 hover:bg-red-100"
+                    onClick={() => {
+                      setErrorMessage("");
+                      setConfirmDelete(true);
+                    }}
+                    type="button"
+                  >
+                    <Trash2 className="size-4" /> Delete assignment
+                  </Button>
+                )}
               </div>
             )}
           </form>
         </DialogContent>
       </Dialog>
-
-      {canDelete && <Dialog open={deleteOpen} onOpenChange={(open) => { setDeleteOpen(open); setErrorMessage(""); }}>
-        <DialogContent className="rounded-2xl sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Delete {assignment.title}?</DialogTitle>
-            <DialogDescription>
-              This removes the shared assignment for all {assignment.channels.length} assigned {assignmentUnit}{assignment.channels.length === 1 ? "" : "s"}, including its conversations and submitted evidence.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800">
-            This action cannot be undone.
-          </div>
-          {errorMessage && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700" role="alert">{errorMessage}</p>}
-          <div className="grid grid-cols-2 gap-2">
-            <Button className="rounded-xl border-2 border-black bg-white text-black hover:bg-zinc-100" disabled={isDeleting} onClick={() => setDeleteOpen(false)} type="button">Cancel</Button>
-            <Button className="rounded-xl bg-red-700 font-black text-white hover:bg-red-800" disabled={isDeleting} onClick={() => void deleteAssignment()} type="button">
-              {isDeleting && <Loader2 className="size-4 animate-spin" />}
-              {isDeleting ? "Deleting…" : "Delete assignment"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>}
     </div>
   );
 }

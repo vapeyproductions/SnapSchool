@@ -233,31 +233,70 @@
 /* Optional calmer presentation for parent and teacher accounts. */
 html.adult-mode-enabled body,
 .adult-mode {
-  background: #eef2f6;
-  color: #243244;
+  background: #f4f6f8;
+  color: #263746;
+}
+
+html.adult-mode-enabled {
+  font-size: 15px;
 }
 
 .adult-mode.snapschool-shell {
-  background-color: #eef2f6;
+  background-color: #f4f6f8;
   background-image: none;
 }
 
 .adult-mode > header {
-  border-color: #cbd5e1 !important;
-  background: #f8fafc !important;
-  box-shadow: 0 1px 3px rgb(15 23 42 / 8%);
+  border-color: #244f73 !important;
+  background: #2f6690 !important;
+  color: #fff;
+  box-shadow: 0 1px 4px rgb(15 23 42 / 18%);
 }
 
-.adult-mode h1 {
+.adult-mode .dashboard-intro {
+  margin-bottom: 1rem;
+}
+
+.adult-mode .dashboard-intro h1 {
   color: #1e293b;
+  font-size: 1.75rem;
+  line-height: 2rem;
   letter-spacing: -.025em;
+}
+
+.adult-mode .dashboard-intro p {
+  max-width: 48rem;
+  font-size: .8125rem;
+  line-height: 1.3rem;
+}
+
+.adult-mode .snapschool-header .adult-mode-toggle {
+  border-color: rgb(255 255 255 / 55%) !important;
+}
+
+html.adult-mode-enabled [class*="font-black"] {
+  font-weight: 700 !important;
+}
+
+html.adult-mode-enabled [class*="uppercase"] {
+  letter-spacing: .055em !important;
+}
+
+html.adult-mode-enabled [class*="border-2"] {
+  border-width: 1px !important;
+}
+
+html.adult-mode-enabled [class*="rounded-2xl"],
+html.adult-mode-enabled [class*="rounded-[1.75rem]"],
+html.adult-mode-enabled [class*="rounded-[2rem]"] {
+  border-radius: .55rem !important;
 }
 
 .adult-mode .social-workspace {
   border-color: #cbd5e1 !important;
-  border-radius: 1rem;
+  border-radius: .6rem;
   background: #fff;
-  box-shadow: 0 4px 16px rgb(15 23 42 / 8%) !important;
+  box-shadow: 0 2px 8px rgb(15 23 42 / 7%) !important;
   animation: none;
 }
 
@@ -271,12 +310,12 @@ html.adult-mode-enabled [class*="shadow-["] {
 
 html.adult-mode-enabled [class*="bg-[#fffc00]"],
 html.adult-mode-enabled [class*="bg-[#fffbd5]"] {
-  background-color: #e8eef5 !important;
+  background-color: #eaf0f5 !important;
 }
 
 html.adult-mode-enabled [class*="bg-[#c7b7ff]"],
 html.adult-mode-enabled [class*="bg-[#b7a4ff]"] {
-  background-color: #dfe7f0 !important;
+  background-color: #dce8f1 !important;
 }
 
 html.adult-mode-enabled [class*="bg-[#ff5b35]"] {
@@ -284,11 +323,11 @@ html.adult-mode-enabled [class*="bg-[#ff5b35]"] {
 }
 
 html.adult-mode-enabled [class*="bg-[#f4f0e8]"] {
-  background-color: #f3f6f9 !important;
+  background-color: #f5f7f9 !important;
 }
 
 html.adult-mode-enabled [class*="bg-black"] {
-  background-color: #334155 !important;
+  background-color: #2f5f84 !important;
 }
 
 html.adult-mode-enabled [class*="ring-[#7b61ff]"] {
@@ -297,7 +336,8 @@ html.adult-mode-enabled [class*="ring-[#7b61ff]"] {
 
 .adult-mode .assignment-story-card {
   border-color: #cbd5e1 !important;
-  border-left-color: #64748b !important;
+  border-left-color: #5d7f9c !important;
+  border-radius: .5rem;
   background: #fff !important;
 }
 
@@ -325,6 +365,7 @@ html.adult-mode-enabled [data-slot="dialog-content"] {
   border: 1px solid #cbd5e1;
   background: #f8fafc !important;
   color: #243244;
+  border-radius: .6rem !important;
   box-shadow: 0 18px 45px rgb(15 23 42 / 18%);
 }
 
