@@ -1048,22 +1048,13 @@ export const createPersonalAssignment = async (data: {
 }) => {
   try {
     const creator = await authenticateCaller(data.firebaseIdToken);
-    const student = creator.role === "student"
-      ? creator
-      : await getProfileByUid(data.firebaseIdToken, data.targetStudentUid);
-
-    if (student.role !== "student") {
-      throw new Error("Personal assignments can only be added to student accounts");
-    }
-    if (creator.role === "student" && creator.uid !== student.uid) {
-      throw new Error("Students can only create assignments for themselves");
-    }
     if (creator.role === "administrator") {
       throw new Error("Administrators must publish assignments through a class");
     }
+    let approvedStudentUsername: string | undefined;
     if (creator.role === "parent") {
       const { firebaseProjectId } = requireServerConfig();
-      const connectionId = `${creator.uid}_${student.uid}`;
+      const connectionId = `${creator.uid}_${data.targetStudentUid}`;
       const connectionResponse = await fetch(
         `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}` +
           `/databases/(default)/documents/familyConnections/${encodeURIComponent(connectionId)}`,
@@ -1078,11 +1069,26 @@ export const createPersonalAssignment = async (data: {
       if (
         !connection ||
         connection.fields?.parentUid?.stringValue !== creator.uid ||
-        connection.fields?.studentUid?.stringValue !== student.uid ||
+        connection.fields?.studentUid?.stringValue !== data.targetStudentUid ||
         connection.fields?.status?.stringValue !== "approved"
       ) {
         throw new Error("The student must approve parent access before you can add assignments");
       }
+      approvedStudentUsername = connection.fields.studentUsername?.stringValue;
+    }
+
+    const student = creator.role === "student"
+      ? creator
+      : await getProfileByUid(
+          data.firebaseIdToken,
+          data.targetStudentUid,
+          approvedStudentUsername,
+        );
+    if (student.role !== "student") {
+      throw new Error("Personal assignments can only be added to student accounts");
+    }
+    if (creator.role === "student" && creator.uid !== student.uid) {
+      throw new Error("Students can only create assignments for themselves");
     }
 
     const title = data.title.trim();

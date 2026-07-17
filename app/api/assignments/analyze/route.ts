@@ -79,20 +79,6 @@ const requireAssignmentPlanner = async (
     throw new Error("This account cannot analyze personal assignments");
   }
 
-  const studentResponse = await fetch(
-    `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}` +
-      `/databases/(default)/documents/profiles/${encodeURIComponent(targetStudentUid)}`,
-    { cache: "no-store", headers: { Authorization: `Bearer ${idToken}` } },
-  );
-  const studentProfile = (await studentResponse.json()) as {
-    fields?: Record<string, { stringValue?: string }>;
-  };
-  if (
-    !studentResponse.ok ||
-    studentProfile.fields?.role?.stringValue !== "student"
-  ) {
-    throw new Error("Parents can only plan work for an approved student account");
-  }
   const connectionId = `${account.localId}_${targetStudentUid}`;
   const connectionResponse = await fetch(
     `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}` +
@@ -109,6 +95,29 @@ const requireAssignmentPlanner = async (
     connection.fields?.status?.stringValue !== "approved"
   ) {
     throw new Error("The student must approve parent access before you can plan assignments");
+  }
+
+  let studentResponse = await fetch(
+    `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}` +
+      `/databases/(default)/documents/profiles/${encodeURIComponent(targetStudentUid)}`,
+    { cache: "no-store", headers: { Authorization: `Bearer ${idToken}` } },
+  );
+  if (!studentResponse.ok && connection.fields?.studentUsername?.stringValue) {
+    studentResponse = await fetch(
+      `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}` +
+        `/databases/(default)/documents/users/${encodeURIComponent(connection.fields.studentUsername.stringValue)}`,
+      { cache: "no-store", headers: { Authorization: `Bearer ${idToken}` } },
+    );
+  }
+  const studentProfile = (await studentResponse.json()) as {
+    fields?: Record<string, { stringValue?: string }>;
+  };
+  if (
+    !studentResponse.ok ||
+    studentProfile.fields?.uid?.stringValue !== targetStudentUid ||
+    studentProfile.fields?.role?.stringValue !== "student"
+  ) {
+    throw new Error("The approved student profile could not be verified");
   }
 
   return account.localId;
