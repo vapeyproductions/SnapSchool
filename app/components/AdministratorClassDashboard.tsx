@@ -3,6 +3,7 @@
 import type { User } from "firebase/auth";
 import {
   AlertTriangle,
+  ArrowLeft,
   CalendarClock,
   CalendarDays,
   CheckCircle2,
@@ -290,14 +291,30 @@ function AssignmentManagement({
               {isSaving && <Loader2 className="size-4 animate-spin" />}
               {isSaving ? "Updating assignment…" : `Update for ${assignment.channels.length} ${assignmentUnit}${assignment.channels.length === 1 ? "" : "s"}`}
             </Button>
+            {canDelete && (
+              <div className="rounded-xl border-2 border-red-200 bg-red-50 p-3">
+                <p className="text-xs font-black uppercase tracking-wider text-red-800">Delete assignment</p>
+                <p className="mt-1 text-xs leading-5 text-red-700">
+                  Only the creator can delete this assignment. Deletion removes it for every assigned {assignmentUnit}.
+                </p>
+                <Button
+                  className="mt-3 rounded-full border-2 border-red-700 bg-white px-3 font-black text-red-700 hover:bg-red-100"
+                  onClick={() => {
+                    setErrorMessage("");
+                    setEditOpen(false);
+                    setDeleteOpen(true);
+                  }}
+                  type="button"
+                >
+                  <Trash2 className="size-4" /> Delete assignment
+                </Button>
+              </div>
+            )}
           </form>
         </DialogContent>
       </Dialog>
 
       {canDelete && <Dialog open={deleteOpen} onOpenChange={(open) => { setDeleteOpen(open); setErrorMessage(""); }}>
-        <DialogTrigger render={<Button className="rounded-full border-2 border-red-700 bg-white px-3 font-black text-red-700 hover:bg-red-50" />}>
-          <Trash2 className="size-4" /> Delete
-        </DialogTrigger>
         <DialogContent className="rounded-2xl sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Delete {assignment.title}?</DialogTitle>
@@ -627,7 +644,7 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
     (assignment) => assignment.key === selectedAssignmentKey,
   )
     ? selectedAssignmentKey
-    : assignments[0]?.key || "";
+    : "";
   const selectedAssignment = assignments.find(
     (assignment) => assignment.key === effectiveAssignmentKey,
   );
@@ -699,7 +716,7 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
 
   return (
     <Chat client={client}>
-      <div className="grid min-h-[42rem] w-full min-w-0 overflow-hidden bg-white md:grid-cols-[14rem_minmax(0,1fr)] xl:grid-cols-[15rem_19rem_minmax(0,1fr)]">
+      <div className="grid min-h-[42rem] w-full min-w-0 overflow-hidden bg-white md:grid-cols-[15rem_minmax(0,1fr)]">
         <aside className="min-w-0 overflow-hidden border-b-2 border-black bg-[#f4f0e8] md:border-r-2 xl:border-b-0">
           <div className="border-b-2 border-black bg-[#fffc00] px-4 py-4">
             <p className="text-xs font-black uppercase tracking-[0.14em]">Classes</p>
@@ -728,6 +745,7 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
                   key={schoolClass.id}
                   onClick={() => {
                     setSelectedClassId(schoolClass.id);
+                    setSelectedAssignmentKey("");
                     setTab("overview");
                     setReplyChannelCid("");
                     setSelectedGroupChannelCid("");
@@ -746,12 +764,14 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
           </div>
         </aside>
 
-        <aside className="min-w-0 overflow-hidden border-b-2 border-black bg-white xl:border-b-0 xl:border-r-2">
-          <div className="border-b-2 border-black px-4 py-4">
-            <p className="font-black">{selectedClass?.name ?? "Assignments"}</p>
-            <p className="mt-1 text-xs text-zinc-500">Published assignments and assessments</p>
+        <section className={`min-w-0 overflow-hidden bg-white ${selectedAssignment || errorMessage ? "hidden" : "block"}`}>
+          <div className="border-b-2 border-black px-5 py-5">
+            <p className="text-xl font-black">{selectedClass?.name ?? "Assignments"}</p>
+            <p className="mt-1 text-sm text-zinc-500">
+              Choose an assignment only when you need to review progress or answer a question.
+            </p>
           </div>
-          <div className="grid gap-2 p-3">
+          <div className="grid gap-3 p-4 lg:grid-cols-2 2xl:grid-cols-3">
             {assignments.length === 0 ? (
               <p className="rounded-2xl border-2 border-dashed border-zinc-300 p-5 text-center text-sm text-zinc-500">
                 No assignments have been published to this class yet.
@@ -778,11 +798,7 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
 
                 return (
                   <button
-                    className={`min-w-0 max-w-full overflow-hidden rounded-2xl border-2 p-3 text-left transition ${
-                      effectiveAssignmentKey === assignment.key
-                        ? "border-black bg-[#fffbd5] shadow-[3px_3px_0_#111]"
-                        : "border-zinc-200 bg-white hover:border-black"
-                    }`}
+                    className="min-w-0 max-w-full overflow-hidden rounded-2xl border-2 border-zinc-200 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-black hover:shadow-[3px_3px_0_#111]"
                     key={assignment.key}
                     onClick={() => {
                       setSelectedAssignmentKey(assignment.key);
@@ -817,9 +833,9 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
               })
             )}
           </div>
-        </aside>
+        </section>
 
-        <main className="min-w-0 overflow-hidden bg-[#f4f0e8] md:col-span-2 xl:col-span-1">
+        <main className={`min-w-0 overflow-hidden bg-[#f4f0e8] ${selectedAssignment || errorMessage ? "block" : "hidden"}`}>
           {errorMessage ? (
             <p className="m-4 rounded-2xl border-2 border-red-600 bg-red-50 p-4 text-sm font-semibold text-red-700" role="alert">
               {errorMessage}
@@ -835,6 +851,18 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
           ) : (
             <>
               <header className="border-b-2 border-black bg-white px-5 py-4">
+                <button
+                  className="mb-4 flex items-center gap-2 rounded-full border-2 border-black bg-white px-3 py-1.5 text-xs font-black transition hover:bg-[#fffc00]"
+                  onClick={() => {
+                    setSelectedAssignmentKey("");
+                    setReplyChannelCid("");
+                    setSelectedGroupChannelCid("");
+                    setTab("overview");
+                  }}
+                  type="button"
+                >
+                  <ArrowLeft className="size-4" /> Back to {selectedClass?.name ?? "assignments"}
+                </button>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-xl font-black tracking-tight">{selectedAssignment.title}</p>

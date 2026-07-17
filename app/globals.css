@@ -230,6 +230,104 @@
   outline-offset: 2px;
 }
 
+/* Optional calmer presentation for parent and teacher accounts. */
+html.adult-mode-enabled body,
+.adult-mode {
+  background: #eef2f6;
+  color: #243244;
+}
+
+.adult-mode.snapschool-shell {
+  background-color: #eef2f6;
+  background-image: none;
+}
+
+.adult-mode > header {
+  border-color: #cbd5e1 !important;
+  background: #f8fafc !important;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 8%);
+}
+
+.adult-mode h1 {
+  color: #1e293b;
+  letter-spacing: -.025em;
+}
+
+.adult-mode .social-workspace {
+  border-color: #cbd5e1 !important;
+  border-radius: 1rem;
+  background: #fff;
+  box-shadow: 0 4px 16px rgb(15 23 42 / 8%) !important;
+  animation: none;
+}
+
+html.adult-mode-enabled [class*="border-black"] {
+  border-color: #cbd5e1 !important;
+}
+
+html.adult-mode-enabled [class*="shadow-["] {
+  box-shadow: 0 2px 6px rgb(15 23 42 / 10%) !important;
+}
+
+html.adult-mode-enabled [class*="bg-[#fffc00]"],
+html.adult-mode-enabled [class*="bg-[#fffbd5]"] {
+  background-color: #e8eef5 !important;
+}
+
+html.adult-mode-enabled [class*="bg-[#c7b7ff]"],
+html.adult-mode-enabled [class*="bg-[#b7a4ff]"] {
+  background-color: #dfe7f0 !important;
+}
+
+html.adult-mode-enabled [class*="bg-[#ff5b35]"] {
+  background-color: #64748b !important;
+}
+
+html.adult-mode-enabled [class*="bg-[#f4f0e8]"] {
+  background-color: #f3f6f9 !important;
+}
+
+html.adult-mode-enabled [class*="bg-black"] {
+  background-color: #334155 !important;
+}
+
+html.adult-mode-enabled [class*="ring-[#7b61ff]"] {
+  --tw-ring-color: #94a3b8 !important;
+}
+
+.adult-mode .assignment-story-card {
+  border-color: #cbd5e1 !important;
+  border-left-color: #64748b !important;
+  background: #fff !important;
+}
+
+.adult-mode .assignment-story-card[data-urgency="critical"] {
+  box-shadow: inset 4px 0 0 #b45353 !important;
+}
+
+.adult-mode .social-workspace .str-chat__message--me .str-chat__message-bubble {
+  background: #dfe7f0;
+  color: #243244;
+}
+
+.adult-mode .social-workspace .str-chat__channel-list-item:hover,
+.adult-mode .assignment-sidebar-card:hover {
+  box-shadow: 0 2px 6px rgb(15 23 42 / 10%);
+  transform: none;
+}
+
+html.adult-mode-enabled [data-slot="dialog-overlay"] {
+  background: rgb(15 23 42 / 20%);
+  backdrop-filter: blur(2px);
+}
+
+html.adult-mode-enabled [data-slot="dialog-content"] {
+  border: 1px solid #cbd5e1;
+  background: #f8fafc !important;
+  color: #243244;
+  box-shadow: 0 18px 45px rgb(15 23 42 / 18%);
+}
+
 @media (max-width: 767px) {
   .mobile-assignment-list[data-mobile-hidden="true"],
   .mobile-assignment-detail[data-mobile-hidden="true"] {

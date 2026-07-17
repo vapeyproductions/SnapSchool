@@ -6,12 +6,13 @@ import {
   Flame,
   ListChecks,
   LogOut,
+  MoonStar,
   Plus,
   School,
   Settings,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useContext, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 
 import AuthContext from "@/app/components/AuthContext";
 import CreateGroupModal from "@/app/components/CreateGroupModal";
@@ -42,13 +43,44 @@ export default function ChatPage() {
   const [dashboardView, setDashboardView] = useState<"assignments" | "calendar">("assignments");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
+  const [adultMode, setAdultMode] = useState(false);
 
   const displayName = user?.displayName || user?.email?.split("@")[0] || "User";
   const isAdministrator = role === "administrator";
   const isParent = role === "parent";
   const isStudent = role === "student";
   const canCreatePersonalAssignment = isParent || isStudent;
+  const canUseAdultMode = isAdministrator || isParent;
   const initial = displayName.charAt(0).toUpperCase();
+
+  useEffect(() => {
+    const loadPreference = window.setTimeout(() => {
+      setAdultMode(
+        Boolean(
+          user &&
+          canUseAdultMode &&
+          window.localStorage.getItem(`snapschool:adult-mode:${user.uid}`) === "true",
+        ),
+      );
+    }, 0);
+    return () => window.clearTimeout(loadPreference);
+  }, [canUseAdultMode, user]);
+
+  useEffect(() => {
+    const enabled = canUseAdultMode && adultMode;
+    document.documentElement.classList.toggle("adult-mode-enabled", enabled);
+    return () => document.documentElement.classList.remove("adult-mode-enabled");
+  }, [adultMode, canUseAdultMode]);
+
+  const toggleAdultMode = () => {
+    if (!user || !canUseAdultMode) return;
+    const nextMode = !adultMode;
+    setAdultMode(nextMode);
+    window.localStorage.setItem(
+      `snapschool:adult-mode:${user.uid}`,
+      String(nextMode),
+    );
+  };
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -72,7 +104,7 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="snapschool-shell min-h-screen text-[#171717]">
+    <div className={`snapschool-shell min-h-screen text-[#171717] ${adultMode && canUseAdultMode ? "adult-mode" : ""}`}>
       <header className="sticky top-0 z-40 border-b-2 border-black bg-[#fffc00]">
         <div className="mx-auto flex min-h-[4.5rem] max-w-[1540px] flex-wrap items-center justify-between gap-3 px-4 py-2 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
@@ -112,6 +144,21 @@ export default function ChatPage() {
           )}
 
           <div className="flex items-center gap-2">
+            {canUseAdultMode && (
+              <button
+                aria-label="Toggle Adult mode"
+                aria-pressed={adultMode}
+                className={`flex h-10 items-center gap-2 rounded-full border-2 border-black px-2.5 text-xs font-black transition sm:px-3 ${adultMode ? "bg-slate-700 text-white" : "bg-white text-black hover:bg-slate-100"}`}
+                onClick={toggleAdultMode}
+                type="button"
+              >
+                <MoonStar className="size-4" />
+                <span className="hidden lg:inline">Adult mode</span>
+                <span className={`relative h-5 w-9 rounded-full border border-current ${adultMode ? "bg-slate-500" : "bg-slate-200"}`} aria-hidden="true">
+                  <span className={`absolute top-0.5 size-3.5 rounded-full bg-white shadow-sm transition-transform ${adultMode ? "translate-x-[1.05rem]" : "translate-x-0.5"}`} />
+                </span>
+              </button>
+            )}
             {!isAdministrator && <InstallAppButton />}
             {!isAdministrator && user && role && (
               <NotificationCenter role={role} user={user} />

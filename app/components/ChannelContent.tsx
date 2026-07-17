@@ -102,8 +102,7 @@ export function ChannelContent({
   const isPersonalAssignment =
     channel.data?.assignment_source === "personal" ||
     channel.data?.assignment_source === "independent";
-  const canDeletePersonalAssignment =
-    isPersonalAssignment && channel.data?.created_by_id === user.uid;
+  const canDeletePersonalAssignment = channel.data?.created_by_id === user.uid;
 
   const deletePersonalAssignment = async () => {
     if (!window.confirm(`Delete “${assignmentTitle}”? This removes its plan and submitted progress permanently.`)) return;

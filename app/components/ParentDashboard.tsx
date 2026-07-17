@@ -174,7 +174,7 @@ export default function ParentDashboard({
                     {assignment.currentMission && !complete && <p className="mt-3 rounded-xl bg-white/80 p-3 text-sm"><strong>Current mission:</strong> {assignment.currentMission}</p>}
                     {assignment.lastProgressSummary && <p className="mt-2 text-xs leading-5 text-zinc-700"><strong>Latest reviewed progress:</strong> {assignment.lastProgressSummary}</p>}
                     {assignment.remainingWorkSummary && <p className="mt-2 text-xs leading-5 text-zinc-700"><strong>Still to do:</strong> {assignment.remainingWorkSummary}</p>}
-                    {(assignment.source === "personal" || assignment.source === "independent") && assignment.createdById === user.uid && (
+                    {assignment.createdById === user.uid && (
                       <button className="mt-3 flex items-center gap-1.5 rounded-full border-2 border-red-700 bg-white px-3 py-1.5 text-xs font-black text-red-700 disabled:opacity-50" disabled={deletingCid === assignment.id} onClick={() => void deletePersonalAssignment(assignment.id, assignment.title)} type="button">
                         {deletingCid === assignment.id ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
                         {deletingCid === assignment.id ? "Deleting…" : "Delete personal assignment"}

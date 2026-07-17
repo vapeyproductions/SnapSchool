@@ -1664,16 +1664,6 @@ export const deletePublishedAssignment = async (data: {
     if (channels.some(({ data: channelData }) => channelData.created_by_id !== creator.uid)) {
       throw new Error("Only the person who created this assignment can delete it");
     }
-    if (
-      creator.role !== "administrator" &&
-      channels.some(
-        ({ data: channelData }) =>
-          channelData.assignment_source !== "personal" &&
-          channelData.assignment_source !== "independent",
-      )
-    ) {
-      throw new Error("Only an administrator can delete a school assignment");
-    }
 
     await Promise.all(channels.map(({ channel }) => channel.delete()));
 
