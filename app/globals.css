@@ -352,6 +352,29 @@ html.adult-mode-enabled .adult-mode .snapschool-brand-copy {
   color: #fff !important;
 }
 
+html.adult-mode-enabled .adult-mode .snapschool-view-toggle {
+  color: #244f73;
+}
+
+html.adult-mode-enabled
+  .adult-mode
+  .snapschool-view-toggle
+  button:not([aria-pressed="true"]),
+html.adult-mode-enabled
+  .adult-mode
+  .snapschool-header-controls
+  button[class*="bg-white"] {
+  color: #244f73 !important;
+}
+
+html.adult-mode-enabled
+  .adult-mode
+  .snapschool-header-controls
+  button[class*="bg-white"]:hover {
+  background: #eef4f8 !important;
+  color: #163b59 !important;
+}
+
 .adult-mode .assignment-story-card {
   border-color: #cbd5e1 !important;
   border-left-color: #5d7f9c !important;
