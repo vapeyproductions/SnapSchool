@@ -133,7 +133,7 @@ export default function ChatPage() {
               </button>
               <button
                 aria-pressed={dashboardView === "calendar"}
-                className={`flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-black transition sm:px-4 sm:text-sm ${dashboardView === "calendar" ? "bg-[#fffc00] text-black" : "hover:bg-zinc-100"}`}
+                className={`flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-black transition sm:px-4 sm:text-sm ${dashboardView === "calendar" ? "bg-black text-white" : "hover:bg-zinc-100"}`}
                 onClick={() => setDashboardView("calendar")}
                 type="button"
               >
