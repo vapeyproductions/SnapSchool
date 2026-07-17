@@ -18,20 +18,18 @@ import {
   clearCachedAccountRole,
   readCachedAccountRole,
 } from "@/lib/auth-role-cache";
-import type { AccountRole, StudentMode } from "@/lib/server";
+import type { AccountRole } from "@/lib/server";
 
 type AuthContextValue = {
   user: User | null;
   loading: boolean;
   role: AccountRole | null;
-  studentMode: StudentMode | null;
 };
 
 const AuthContext = createContext<AuthContextValue>({
   user: null,
   loading: true,
   role: null,
-  studentMode: null,
 });
 
 export function AuthProvider({
@@ -42,7 +40,6 @@ export function AuthProvider({
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState<AccountRole | null>(null);
-  const [studentMode, setStudentMode] = useState<StudentMode | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -54,7 +51,6 @@ export function AuthProvider({
 
       if (!currentUser) {
         setRole(null);
-        setStudentMode(null);
         setLoading(false);
         router.replace("/login");
         return;
@@ -86,7 +82,6 @@ export function AuthProvider({
           profile = await getDoc(doc(db, "users", currentUser.displayName));
         }
         const storedRole = profile.data()?.role;
-        const storedStudentMode = profile.data()?.studentMode;
         const verifiedRole =
           storedRole === "student" || storedRole === "administrator" || storedRole === "parent"
             ? storedRole
@@ -94,13 +89,6 @@ export function AuthProvider({
 
         if (!active) return;
         setRole(verifiedRole);
-        setStudentMode(
-          verifiedRole === "student"
-            ? storedStudentMode === "independent"
-              ? "independent"
-              : "school"
-            : null,
-        );
         if (verifiedRole) cacheAccountRole(currentUser.uid, verifiedRole);
         else clearCachedAccountRole(currentUser.uid);
       } catch {
@@ -131,7 +119,7 @@ export function AuthProvider({
   }
 
   return (
-    <AuthContext.Provider value={{ loading, role, studentMode, user }}>
+    <AuthContext.Provider value={{ loading, role, user }}>
       {children}
     </AuthContext.Provider>
   );

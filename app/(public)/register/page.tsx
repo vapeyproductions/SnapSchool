@@ -12,7 +12,6 @@ type AccountType = "student" | "administrator" | "parent";
 export default function RegisterPage() {
   const [buttonClicked, setButtonClicked] = useState(false);
   const [accountType, setAccountType] = useState<AccountType>("student");
-  const [studentMode, setStudentMode] = useState<"independent" | "school">("school");
   const [errorMessage, setErrorMessage] = useState("");
   const router = useRouter();
 
@@ -106,21 +105,6 @@ export default function RegisterPage() {
 
       <form className="space-y-5" onSubmit={handleSubmit}>
         <input type="hidden" name="role" value={accountType} />
-        {accountType === "student" && <input type="hidden" name="studentMode" value={studentMode} />}
-
-        {accountType === "student" && (
-          <fieldset className="space-y-3 rounded-2xl border-2 border-black bg-[#fffbd5] p-4">
-            <legend className="px-1 text-sm font-black">How will you use SnapSchool?</legend>
-            <button className={`w-full rounded-xl border-2 border-black p-3 text-left ${studentMode === "school" ? "bg-black text-white" : "bg-white"}`} onClick={() => setStudentMode("school")} type="button">
-              <strong className="block">Connected to my school</strong>
-              <span className={`mt-1 block text-xs ${studentMode === "school" ? "text-zinc-300" : "text-zinc-500"}`}>Teachers and administrators publish my assignments.</span>
-            </button>
-            <button className={`w-full rounded-xl border-2 border-black p-3 text-left ${studentMode === "independent" ? "bg-black text-white" : "bg-white"}`} onClick={() => setStudentMode("independent")} type="button">
-              <strong className="block">I&apos;m using SnapSchool independently</strong>
-              <span className={`mt-1 block text-xs ${studentMode === "independent" ? "text-zinc-300" : "text-zinc-500"}`}>I can upload my own work and let AI create my streak plans.</span>
-            </button>
-          </fieldset>
-        )}
 
         <div className="space-y-2">
           <label className="block text-sm font-medium" htmlFor="username">

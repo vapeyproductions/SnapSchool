@@ -16,7 +16,7 @@ import { changeUsername } from "@/lib/server";
 import AuthContext from "./AuthContext";
 
 export default function ProfileSettingsModal() {
-  const { role, studentMode, user } = useContext(AuthContext);
+  const { role, user } = useContext(AuthContext);
   const [connections, setConnections] = useState<FamilyConnection[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [busyId, setBusyId] = useState("");
@@ -143,7 +143,7 @@ export default function ProfileSettingsModal() {
           <div>
             <p className="font-black capitalize">{user?.displayName}</p>
             <p className="text-xs font-semibold capitalize text-zinc-500">
-              {role} account{role === "student" ? ` · ${studentMode === "independent" ? "independent use" : "school connected"}` : ""}
+              {role} account
             </p>
           </div>
           <span className="rounded-full bg-black px-3 py-1 text-[10px] font-black uppercase tracking-wider text-white">Account</span>

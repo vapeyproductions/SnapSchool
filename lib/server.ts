@@ -31,7 +31,6 @@ export const registerUser = async (form: FormData) => {
       .trim()
       .toLowerCase();
     const roleValue = form.get("role");
-    const studentModeValue = form.get("studentMode");
     const imageBaseUrl = process.env.NEXT_PUBLIC_IMAGE_URL;
 
     if (!email || !password || !username) {
@@ -57,14 +56,9 @@ export const registerUser = async (form: FormData) => {
     }
 
     const role: AccountRole = roleValue;
-    const studentMode: StudentMode | null = role === "student"
-      ? studentModeValue === "independent" || studentModeValue === "school"
-        ? studentModeValue
-        : null
-      : null;
-    if (role === "student" && !studentMode) {
-      throw new Error("Choose whether this student is school-connected or independent");
-    }
+    // Keep a single compatibility value for existing Firestore profiles and
+    // rules. Student capabilities no longer depend on this legacy field.
+    const studentMode: StudentMode | null = role === "student" ? "school" : null;
     const photoURL = `${imageBaseUrl}${encodeURIComponent(username)}`;
     const userRef = doc(db, "users", username);
 

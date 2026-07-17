@@ -577,17 +577,6 @@ export const createSchoolClass = async (data: {
         success: false,
       };
     }
-    const independentStudent = students.find(
-      (profile) => profile.studentMode === "independent",
-    );
-    if (independentStudent) {
-      return {
-        classRecord: null,
-        error: `The independent account "${independentStudent.username}" cannot be added to a school class`,
-        success: false,
-      };
-    }
-
     const classId = `class-${crypto.randomUUID().replaceAll("-", "")}`;
     const { firebaseProjectId } = requireServerConfig();
     const document: FirestoreDocument = {
@@ -737,18 +726,6 @@ export const updateSchoolClass = async (data: {
         warning: null,
       };
     }
-    const independentStudent = students.find(
-      (profile) => profile.studentMode === "independent",
-    );
-    if (independentStudent) {
-      return {
-        classRecord: null,
-        error: `The independent account "${independentStudent.username}" cannot be added to a school class`,
-        success: false,
-        warning: null,
-      };
-    }
-
     const { firebaseProjectId } = requireServerConfig();
     const updateUrl = new URL(
       `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}` +

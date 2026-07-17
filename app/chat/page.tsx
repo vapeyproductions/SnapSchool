@@ -137,7 +137,7 @@ export default function ChatPage() {
               <span className="text-xs font-bold capitalize text-zinc-500">{role}</span>
             </div>
             <h1 className="max-w-4xl text-3xl font-black leading-[0.95] tracking-[-0.055em] sm:text-5xl">
-              Hey, <span className="capitalize">{displayName}</span>. <span className="text-[#f24e2e]">Keep it moving.</span>
+              Hey, <span className="capitalize">{displayName}</span>.
             </h1>
             <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-zinc-600 sm:text-base">
               {isAdministrator
