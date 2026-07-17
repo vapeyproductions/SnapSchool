@@ -16,9 +16,54 @@ const DOCUMENT_TYPES = new Set([
 ]);
 
 type FirebaseAccount = { displayName?: string; localId?: string };
+type FirestoreDocument = {
+  fields?: Record<string, { stringValue?: string }>;
+};
 
 const errorResponse = (message: string, status: number) =>
   Response.json({ error: message }, { status });
+
+const getApprovedConnection = async (
+  idToken: string,
+  projectId: string,
+  parentUid: string,
+  studentUid: string,
+) => {
+  const response = await fetch(
+    `https://firestore.googleapis.com/v1/projects/${projectId}` +
+      "/databases/(default)/documents:runQuery",
+    {
+      body: JSON.stringify({
+        structuredQuery: {
+          from: [{ collectionId: "familyConnections" }],
+          where: {
+            fieldFilter: {
+              field: { fieldPath: "parentUid" },
+              op: "EQUAL",
+              value: { stringValue: parentUid },
+            },
+          },
+        },
+      }),
+      cache: "no-store",
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    },
+  );
+  if (!response.ok) throw new Error("Unable to verify the approved parent connection");
+  const rows = (await response.json()) as Array<{ document?: FirestoreDocument }>;
+  return rows
+    .map((row) => row.document)
+    .find(
+      (document) =>
+        document?.fields?.parentUid?.stringValue === parentUid &&
+        document.fields?.studentUid?.stringValue === studentUid &&
+        document.fields?.status?.stringValue === "approved",
+    );
+};
 
 const requireAssignmentPlanner = async (
   idToken: string,
@@ -79,21 +124,13 @@ const requireAssignmentPlanner = async (
     throw new Error("This account cannot analyze personal assignments");
   }
 
-  const connectionId = `${account.localId}_${targetStudentUid}`;
-  const connectionResponse = await fetch(
-    `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}` +
-      `/databases/(default)/documents/familyConnections/${encodeURIComponent(connectionId)}`,
-    { cache: "no-store", headers: { Authorization: `Bearer ${idToken}` } },
+  const connection = await getApprovedConnection(
+    idToken,
+    firebaseProjectId,
+    account.localId,
+    targetStudentUid,
   );
-  const connection = (await connectionResponse.json()) as {
-    fields?: Record<string, { stringValue?: string }>;
-  };
-  if (
-    !connectionResponse.ok ||
-    connection.fields?.parentUid?.stringValue !== account.localId ||
-    connection.fields?.studentUid?.stringValue !== targetStudentUid ||
-    connection.fields?.status?.stringValue !== "approved"
-  ) {
+  if (!connection) {
     throw new Error("The student must approve parent access before you can plan assignments");
   }
 

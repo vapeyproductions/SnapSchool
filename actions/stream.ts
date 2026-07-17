@@ -222,6 +222,48 @@ const authenticateCaller = async (
   return profile;
 };
 
+const getApprovedParentConnection = async (
+  firebaseIdToken: string,
+  parentUid: string,
+  studentUid: string,
+) => {
+  const { firebaseProjectId } = requireServerConfig();
+  const response = await fetch(
+    `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}` +
+      "/databases/(default)/documents:runQuery",
+    {
+      body: JSON.stringify({
+        structuredQuery: {
+          from: [{ collectionId: "familyConnections" }],
+          where: {
+            fieldFilter: {
+              field: { fieldPath: "parentUid" },
+              op: "EQUAL",
+              value: { stringValue: parentUid },
+            },
+          },
+        },
+      }),
+      cache: "no-store",
+      headers: {
+        Authorization: `Bearer ${firebaseIdToken}`,
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    },
+  );
+  if (!response.ok) throw new Error("Unable to verify the approved parent connection");
+  const rows = (await response.json()) as Array<{ document?: FirestoreDocument }>;
+  return rows
+    .map((row) => row.document)
+    .find(
+      (document) =>
+        document?.fields?.parentUid?.stringValue === parentUid &&
+        document.fields?.studentUid?.stringValue === studentUid &&
+        document.fields?.status?.stringValue === "approved",
+    );
+};
+
 const generateAssignmentChannelId = (
   assignmentType: AssignmentType,
   title: string,
@@ -1053,28 +1095,15 @@ export const createPersonalAssignment = async (data: {
     }
     let approvedStudentUsername: string | undefined;
     if (creator.role === "parent") {
-      const { firebaseProjectId } = requireServerConfig();
-      const connectionId = `${creator.uid}_${data.targetStudentUid}`;
-      const connectionResponse = await fetch(
-        `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}` +
-          `/databases/(default)/documents/familyConnections/${encodeURIComponent(connectionId)}`,
-        {
-          cache: "no-store",
-          headers: { Authorization: `Bearer ${data.firebaseIdToken}` },
-        },
+      const connection = await getApprovedParentConnection(
+        data.firebaseIdToken,
+        creator.uid,
+        data.targetStudentUid,
       );
-      const connection = connectionResponse.ok
-        ? ((await connectionResponse.json()) as FirestoreDocument)
-        : null;
-      if (
-        !connection ||
-        connection.fields?.parentUid?.stringValue !== creator.uid ||
-        connection.fields?.studentUid?.stringValue !== data.targetStudentUid ||
-        connection.fields?.status?.stringValue !== "approved"
-      ) {
+      if (!connection) {
         throw new Error("The student must approve parent access before you can add assignments");
       }
-      approvedStudentUsername = connection.fields.studentUsername?.stringValue;
+      approvedStudentUsername = connection.fields?.studentUsername?.stringValue;
     }
 
     const student = creator.role === "student"
