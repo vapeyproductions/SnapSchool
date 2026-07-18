@@ -253,7 +253,13 @@ export default function StreakPage({
   if (loading || !user || !role) return <LoadingStreaks />;
 
   if (role === "administrator") {
-    return <AdministratorClassDashboard user={user} />;
+    return (
+      <AdministratorClassDashboard
+        dashboardView={dashboardView}
+        onDashboardViewChange={onDashboardViewChange}
+        user={user}
+      />
+    );
   }
 
   if (role === "parent") {

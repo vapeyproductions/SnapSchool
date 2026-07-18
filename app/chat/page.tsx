@@ -120,8 +120,7 @@ export default function ChatPage() {
             </div>
           </div>
 
-          {!isAdministrator && (
-            <div className="snapschool-view-toggle order-3 mx-auto flex w-full items-center justify-center rounded-full border-2 border-black bg-white p-1 shadow-[2px_2px_0_#111] md:order-none md:mx-0 md:w-auto">
+          <div className="snapschool-view-toggle order-3 mx-auto flex w-full items-center justify-center rounded-full border-2 border-black bg-white p-1 shadow-[2px_2px_0_#111] md:order-none md:mx-0 md:w-auto">
               <button
                 aria-pressed={dashboardView === "assignments"}
                 className={`flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-black transition sm:px-4 sm:text-sm ${dashboardView === "assignments" ? "bg-black text-white" : "hover:bg-zinc-100"}`}
@@ -140,8 +139,7 @@ export default function ChatPage() {
                 <CalendarDays className="size-3.5 sm:size-4" />
                 <span>Calendar</span>
               </button>
-            </div>
-          )}
+          </div>
 
           <div className="snapschool-header-controls flex items-center gap-2">
             {canUseAdultMode && (

@@ -23,6 +23,7 @@ export default function ParentDashboard({
 }) {
   const [children, setChildren] = useState<ParentChildDashboard[]>([]);
   const [selectedChildUid, setSelectedChildUid] = useState("");
+  const [calendarChildUid, setCalendarChildUid] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
   const [deletingCid, setDeletingCid] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -93,6 +94,9 @@ export default function ParentDashboard({
   }
 
   const selectedChild = children.find((child) => child.studentUid === selectedChildUid) ?? children[0];
+  const calendarChildren = calendarChildUid === "all"
+    ? children
+    : children.filter((child) => child.studentUid === calendarChildUid);
   const today = new Date().toISOString().slice(0, 10);
 
   return (
@@ -116,10 +120,22 @@ export default function ParentDashboard({
           <aside className="border-b-2 border-black bg-[#fffbd5] p-3 md:border-b-0 md:border-r-2">
             <p className="mb-3 text-xs font-black uppercase tracking-wider">Students</p>
             <div className="grid gap-2">
+              {dashboardView === "calendar" && (
+                <button
+                  className={`rounded-2xl border-2 border-black p-3 text-left font-black ${calendarChildUid === "all" ? "bg-black text-white shadow-[3px_3px_0_#7b61ff]" : "bg-white"}`}
+                  onClick={() => setCalendarChildUid("all")}
+                  type="button"
+                >
+                  All students
+                  <span className={`mt-1 block text-xs font-medium ${calendarChildUid === "all" ? "text-zinc-300" : "text-zinc-500"}`}>
+                    {children.reduce((total, child) => total + child.assignments.filter((assignment) => assignment.progressPercent < 100).length, 0)} active assignments
+                  </span>
+                </button>
+              )}
               {children.map((child) => (
-                <button className={`rounded-2xl border-2 border-black p-3 text-left font-black capitalize ${selectedChild?.studentUid === child.studentUid ? "bg-black text-white shadow-[3px_3px_0_#7b61ff]" : "bg-white"}`} key={child.studentUid} onClick={() => setSelectedChildUid(child.studentUid)} type="button">
+                <button className={`rounded-2xl border-2 border-black p-3 text-left font-black capitalize ${(dashboardView === "calendar" ? calendarChildUid === child.studentUid : selectedChild?.studentUid === child.studentUid) ? "bg-black text-white shadow-[3px_3px_0_#7b61ff]" : "bg-white"}`} key={child.studentUid} onClick={() => dashboardView === "calendar" ? setCalendarChildUid(child.studentUid) : setSelectedChildUid(child.studentUid)} type="button">
                   {child.studentUsername}
-                  <span className={`mt-1 block text-xs font-medium ${selectedChild?.studentUid === child.studentUid ? "text-zinc-300" : "text-zinc-500"}`}>{child.assignments.filter((assignment) => assignment.progressPercent < 100).length} active assignments</span>
+                  <span className={`mt-1 block text-xs font-medium ${(dashboardView === "calendar" ? calendarChildUid === child.studentUid : selectedChild?.studentUid === child.studentUid) ? "text-zinc-300" : "text-zinc-500"}`}>{child.assignments.filter((assignment) => assignment.progressPercent < 100).length} active assignments</span>
                 </button>
               ))}
             </div>
@@ -127,12 +143,16 @@ export default function ParentDashboard({
 
           <section className="min-w-0 p-4 sm:p-5">
             <div className="mb-4">
-              <p className="text-2xl font-black capitalize">{selectedChild?.studentUsername}&apos;s assignments</p>
+              <p className="text-2xl font-black capitalize">
+                {dashboardView === "calendar" && calendarChildUid === "all"
+                  ? "All students’ calendar"
+                  : `${(dashboardView === "calendar" ? calendarChildren[0]?.studentUsername : selectedChild?.studentUsername) ?? "Student"}’s ${dashboardView === "calendar" ? "calendar" : "assignments"}`}
+              </p>
               <p className="text-sm text-zinc-500">Progress updates appear after the student submits evidence and the AI reviews it.</p>
             </div>
             {dashboardView === "calendar" ? (
               <AssignmentCalendar
-                assignments={(selectedChild?.assignments ?? [])
+                assignments={calendarChildren.flatMap((child) => child.assignments
                   .filter((assignment) => assignment.progressPercent < 100)
                   .map((assignment) => ({
                     classId: assignment.classId,
@@ -141,12 +161,17 @@ export default function ParentDashboard({
                     currentMission: assignment.currentMission,
                     dailyPlan: assignment.dailyPlan,
                     dueDate: assignment.dueDate,
-                    id: assignment.id,
+                    id: `${child.studentUid}::${assignment.id}`,
+                    ownerName: child.studentUsername,
                     targetSteps: assignment.targetSteps,
                     title: assignment.title,
-                  }))}
-                emptyMessage={`${selectedChild?.studentUsername ?? "This student"} has no active assignments scheduled.`}
-                onAssignmentSelect={(assignmentId) => {
+                  })))}
+                emptyMessage={calendarChildUid === "all" ? "No connected students have active assignments scheduled." : `${calendarChildren[0]?.studentUsername ?? "This student"} has no active assignments scheduled.`}
+                onAssignmentSelect={(calendarAssignmentId) => {
+                  const separator = calendarAssignmentId.indexOf("::");
+                  const childUid = calendarAssignmentId.slice(0, separator);
+                  const assignmentId = calendarAssignmentId.slice(separator + 2);
+                  setSelectedChildUid(childUid);
                   setSelectedAssignmentId(assignmentId);
                   onDashboardViewChange("assignments");
                   window.setTimeout(() => {
@@ -156,6 +181,7 @@ export default function ParentDashboard({
                     });
                   }, 0);
                 }}
+                title={calendarChildUid === "all" ? "All students" : `${calendarChildren[0]?.studentUsername ?? "Student"}’s calendar`}
               />
             ) : (
             <div className="grid gap-3 lg:grid-cols-2">

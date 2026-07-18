@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/dialog";
 import { getAssignmentPriority } from "@/lib/assignment-priority";
 
+import AssignmentCalendar, { type CalendarAssignment } from "./AssignmentCalendar";
 import { useGetStreamClient } from "./useGetStreamClient";
 
 type DashboardTab = "group-chat" | "messages" | "overview" | "progress";
@@ -73,6 +74,20 @@ type AssignmentGroup = {
   key: string;
   kind: string;
   title: string;
+};
+
+type TeacherCalendarAssignment = CalendarAssignment & {
+  assignmentKey: string;
+  classId: string;
+};
+
+const assignmentKeyForChannel = (channel: StreamChannel) => {
+  const title = channel.data?.assignment_title || channel.data?.name || "Assignment";
+  const dueDate = channel.data?.original_due_date ?? channel.data?.due_date;
+  const kind = channel.data?.assignment_kind || "assignment";
+  return channel.data?.group_assignment_batch_id
+    ? `group:${channel.data.group_assignment_batch_id}`
+    : `${title}:${dueDate ?? "none"}:${kind}`;
 };
 
 const progressPercent = (channel: StreamChannel) => {
@@ -495,11 +510,20 @@ function LoadingDashboard() {
   );
 }
 
-export default function AdministratorClassDashboard({ user }: { user: User }) {
+export default function AdministratorClassDashboard({
+  dashboardView,
+  onDashboardViewChange,
+  user,
+}: {
+  dashboardView: "assignments" | "calendar";
+  onDashboardViewChange: (view: "assignments" | "calendar") => void;
+  user: User;
+}) {
   const { client } = useGetStreamClient(user);
   const [classes, setClasses] = useState<SchoolClassSummary[]>([]);
   const [channels, setChannels] = useState<StreamChannel[]>([]);
   const [selectedClassId, setSelectedClassId] = useState("");
+  const [calendarClassId, setCalendarClassId] = useState("all");
   const [selectedAssignmentKey, setSelectedAssignmentKey] = useState("");
   const [selectedGroupChannelCid, setSelectedGroupChannelCid] = useState("");
   const [replyChannelCid, setReplyChannelCid] = useState("");
@@ -630,9 +654,7 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
         const title = channel.data?.assignment_title || channel.data?.name || "Assignment";
         const dueDate = channel.data?.original_due_date ?? channel.data?.due_date;
         const kind = channel.data?.assignment_kind || "assignment";
-        const key = channel.data?.group_assignment_batch_id
-          ? `group:${channel.data.group_assignment_batch_id}`
-          : `${title}:${dueDate ?? "none"}:${kind}`;
+        const key = assignmentKeyForChannel(channel);
         const existing = groups.get(key);
 
         if (existing) {
@@ -648,6 +670,39 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
       return firstDue.localeCompare(secondDue) || first.title.localeCompare(second.title);
     });
   }, [channels, selectedClassId]);
+
+  const teacherCalendarAssignments = useMemo<TeacherCalendarAssignment[]>(() => {
+    const grouped = new Map<string, TeacherCalendarAssignment>();
+    const classNames = new Map(classes.map((schoolClass) => [schoolClass.id, schoolClass.name]));
+
+    channels.forEach((channel) => {
+      const classId = channel.data?.class_id;
+      if (typeof classId !== "string" || !classNames.has(classId)) return;
+      const assignmentKey = assignmentKeyForChannel(channel);
+      const calendarId = `${classId}::${assignmentKey}`;
+      if (grouped.has(calendarId)) return;
+
+      grouped.set(calendarId, {
+        assignmentKey,
+        classId,
+        className: classNames.get(classId) ?? channel.data?.class_name ?? "Class",
+        completedSteps: 0,
+        currentMission: null,
+        dailyPlan: [],
+        dueDate: channel.data?.original_due_date ?? channel.data?.due_date ?? "",
+        id: calendarId,
+        targetSteps: 0,
+        title: channel.data?.assignment_title ?? channel.data?.name ?? "Assignment",
+      });
+    });
+
+    return [...grouped.values()].sort(
+      (first, second) =>
+        first.dueDate.localeCompare(second.dueDate) ||
+        first.className.localeCompare(second.className) ||
+        first.title.localeCompare(second.title),
+    );
+  }, [channels, classes]);
 
   const effectiveAssignmentKey = assignments.some(
     (assignment) => assignment.key === selectedAssignmentKey,
@@ -722,6 +777,65 @@ export default function AdministratorClassDashboard({ user }: { user: User }) {
     ) ?? groupAssignmentChannels[0];
 
   if (!client || loading) return <LoadingDashboard />;
+
+  if (dashboardView === "calendar") {
+    const visibleAssignments = calendarClassId === "all"
+      ? teacherCalendarAssignments
+      : teacherCalendarAssignments.filter(
+          (assignment) => assignment.classId === calendarClassId,
+        );
+    const calendarClass = classes.find(
+      (schoolClass) => schoolClass.id === calendarClassId,
+    );
+
+    return (
+      <div className="min-h-[42rem] min-w-0 bg-[#f4f0e8]">
+        <div className="border-b-2 border-black bg-white p-4">
+          <p className="text-xs font-black uppercase tracking-[0.14em]">Calendar scope</p>
+          <p className="mt-1 text-xs text-zinc-500">
+            Review every published deadline together or focus on one class.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              aria-pressed={calendarClassId === "all"}
+              className={`rounded-full border-2 border-black px-4 py-2 text-xs font-black ${calendarClassId === "all" ? "bg-black text-white" : "bg-white"}`}
+              onClick={() => setCalendarClassId("all")}
+              type="button"
+            >
+              All Classes
+            </button>
+            {classes.map((schoolClass) => (
+              <button
+                aria-pressed={calendarClassId === schoolClass.id}
+                className={`rounded-full border-2 border-black px-4 py-2 text-xs font-black ${calendarClassId === schoolClass.id ? "bg-black text-white" : "bg-white"}`}
+                key={schoolClass.id}
+                onClick={() => setCalendarClassId(schoolClass.id)}
+                type="button"
+              >
+                {schoolClass.name}
+              </button>
+            ))}
+          </div>
+        </div>
+        <AssignmentCalendar
+          assignments={visibleAssignments}
+          description="Hover for the class and due date. Select an assignment to open its class overview."
+          emptyMessage={calendarClassId === "all" ? "No class assignments are scheduled yet." : `${calendarClass?.name ?? "This class"} has no assignments scheduled.`}
+          onAssignmentSelect={(calendarId) => {
+            const assignment = teacherCalendarAssignments.find(
+              (candidate) => candidate.id === calendarId,
+            );
+            if (!assignment) return;
+            setSelectedClassId(assignment.classId);
+            setSelectedAssignmentKey(assignment.assignmentKey);
+            setTab("overview");
+            onDashboardViewChange("assignments");
+          }}
+          title={calendarClassId === "all" ? "All Classes" : `${calendarClass?.name ?? "Class"} calendar`}
+        />
+      </div>
+    );
+  }
 
   return (
     <Chat client={client}>

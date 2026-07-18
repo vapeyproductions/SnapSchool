@@ -26,6 +26,7 @@ export type CalendarAssignment = {
   dailyPlan: AssignmentTask[];
   dueDate: string;
   id: string;
+  ownerName?: string;
   targetSteps: number;
   title: string;
 };
@@ -129,12 +130,16 @@ const buildCalendarItems = (
 
 export default function AssignmentCalendar({
   assignments,
+  description = "Hover over a mission for details. Select it to open the assignment.",
   emptyMessage = "No assignments are scheduled yet.",
   onAssignmentSelect,
+  title = "Learning calendar",
 }: {
   assignments: CalendarAssignment[];
+  description?: string;
   emptyMessage?: string;
   onAssignmentSelect: (assignmentId: string) => void;
+  title?: string;
 }) {
   const today = useMemo(() => new Date(), []);
   const [visibleMonth, setVisibleMonth] = useState(
@@ -195,10 +200,10 @@ export default function AssignmentCalendar({
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="flex items-center gap-2 text-2xl font-black tracking-tight">
-            <CalendarDays className="size-6 text-[#7b61ff]" /> Learning calendar
+            <CalendarDays className="size-6 text-[#7b61ff]" /> {title}
           </p>
           <p className="mt-1 text-sm font-medium text-zinc-500">
-            Hover over a mission for details. Select it to open the assignment.
+            {description}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -290,6 +295,7 @@ export default function AssignmentCalendar({
                               {isDeadline ? <Flag className="mt-0.5 size-3 shrink-0" /> : <Clock3 className="mt-0.5 size-3 shrink-0" />}
                               <span className="line-clamp-2">
                                 {isDeadline ? `Due: ${item.assignment.title}` : item.task?.title}
+                                {item.assignment.ownerName ? ` · ${item.assignment.ownerName}` : ""}
                               </span>
                             </span>
                           </button>
@@ -314,6 +320,11 @@ export default function AssignmentCalendar({
           <span className="mt-0.5 block font-bold" style={{ color: tooltip.color.text }}>
             {tooltip.item.assignment.className}
           </span>
+          {tooltip.item.assignment.ownerName && (
+            <span className="mt-0.5 block capitalize text-zinc-500">
+              {tooltip.item.assignment.ownerName}
+            </span>
+          )}
           {tooltip.item.type === "deadline" ? (
             <span className="mt-2 block font-black text-red-700">Assignment due today</span>
           ) : (
