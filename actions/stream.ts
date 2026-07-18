@@ -1507,10 +1507,7 @@ const loadAuthorizedAssignmentChannels = async (
   firebaseIdToken: string,
   channelCids: string[],
 ) => {
-  const administrator = await authenticateCaller(firebaseIdToken);
-  if (administrator.role !== "administrator") {
-    throw new Error("Only administrators can manage assignments");
-  }
+  const caller = await authenticateCaller(firebaseIdToken);
 
   const cids = [...new Set(channelCids)];
   if (
@@ -1548,14 +1545,22 @@ const loadAuthorizedAssignmentChannels = async (
   }
 
   if (typeof classId === "string") {
+    if (caller.role !== "administrator") {
+      throw new Error("Only a class administrator can manage this assignment");
+    }
     const schoolClass = await getSchoolClass(firebaseIdToken, classId);
-    if (!schoolClass.administratorIds.includes(administrator.uid)) {
+    if (!schoolClass.administratorIds.includes(caller.uid)) {
       throw new Error("You do not have permission to manage this class assignment");
     }
   } else if (
-    channels.some(({ data }) => data.created_by_id !== administrator.uid)
+    channels.some(
+      ({ data }) =>
+        data.created_by_id !== caller.uid ||
+        (data.assignment_source !== "personal" &&
+          data.assignment_source !== "independent"),
+    )
   ) {
-    throw new Error("You do not have permission to manage this assignment");
+    throw new Error("Only the person who created this personal assignment can edit it");
   }
 
   return channels;
@@ -1576,6 +1581,7 @@ export const updatePublishedAssignment = async (data: {
   assignmentKind: (typeof editableAssignmentKinds)[number];
   assignmentSummary: string;
   channelCids: string[];
+  className?: string;
   dueDate: string;
   firebaseIdToken: string;
   title: string;
@@ -1583,6 +1589,7 @@ export const updatePublishedAssignment = async (data: {
   try {
     const title = data.title.trim();
     const assignmentSummary = data.assignmentSummary.trim();
+    const className = data.className?.trim();
 
     if (title.length < 3 || title.length > 100) {
       throw new Error("Assignment titles must be between 3 and 100 characters");
@@ -1595,6 +1602,9 @@ export const updatePublishedAssignment = async (data: {
     }
     if (!editableAssignmentKinds.includes(data.assignmentKind)) {
       throw new Error("Select a valid assignment type");
+    }
+    if (className !== undefined && (className.length < 2 || className.length > 60)) {
+      throw new Error("Class names must be between 2 and 60 characters");
     }
 
     const channels = await loadAuthorizedAssignmentChannels(
@@ -1618,6 +1628,9 @@ export const updatePublishedAssignment = async (data: {
             assignment_kind: data.assignmentKind,
             assignment_summary: assignmentSummary,
             assignment_title: title,
+            ...(className !== undefined && typeof channelData.class_id !== "string"
+              ? { class_name: className }
+              : {}),
             due_date: channelData.late_amendment
               ? channelData.due_date
               : data.dueDate,

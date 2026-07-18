@@ -33,6 +33,8 @@ export type FamilyConnection = {
 };
 
 export type ParentAssignmentSummary = {
+  assignmentKind: string;
+  assignmentSummary: string;
   assignmentType: "group" | "individual";
   classId: string;
   className: string;
@@ -556,6 +558,8 @@ export const getParentDashboard = async (firebaseIdToken: string) => {
           const completedSteps = channel.data?.completed_work_days ?? 0;
           const targetSteps = channel.data?.recommended_work_days ?? 0;
           return {
+            assignmentKind: channel.data?.assignment_kind ?? "other",
+            assignmentSummary: channel.data?.assignment_summary ?? "No summary provided.",
             assignmentType: channel.data?.assignment_type === "group" ? "group" : "individual",
             classId: channel.data?.class_id ?? "",
             className: channel.data?.class_name ?? "Class",

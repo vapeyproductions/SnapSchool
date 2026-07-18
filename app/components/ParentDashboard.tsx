@@ -1,16 +1,94 @@
 "use client";
 
 import type { User } from "firebase/auth";
-import { CalendarDays, CheckCircle2, Clock3, Loader2, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
+import { CalendarDays, CheckCircle2, Clock3, Loader2, Pencil, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { getParentDashboard, type ParentChildDashboard } from "@/actions/profile";
-import { deletePublishedAssignment } from "@/actions/stream";
+import { getParentDashboard, type ParentAssignmentSummary, type ParentChildDashboard } from "@/actions/profile";
+import { deletePublishedAssignment, updatePublishedAssignment } from "@/actions/stream";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import AssignmentCalendar from "./AssignmentCalendar";
 
 const formatDate = (date: string) => date
   ? new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
   : "No due date";
+
+const assignmentKinds = ["homework", "reading", "essay", "project", "quiz", "test", "exam", "other"] as const;
+type AssignmentKind = (typeof assignmentKinds)[number];
+
+function ParentAssignmentEditor({
+  assignment,
+  onUpdated,
+  user,
+}: {
+  assignment: ParentAssignmentSummary;
+  onUpdated: () => Promise<void>;
+  user: User;
+}) {
+  const [open, setOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const defaultKind = assignmentKinds.includes(assignment.assignmentKind as AssignmentKind)
+    ? assignment.assignmentKind
+    : "other";
+
+  const save = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSaving(true);
+    setErrorMessage("");
+    const form = new FormData(event.currentTarget);
+    try {
+      const result = await updatePublishedAssignment({
+        assignmentKind: String(form.get("assignmentKind")) as AssignmentKind,
+        assignmentSummary: String(form.get("assignmentSummary") ?? "").trim(),
+        channelCids: [assignment.id],
+        className: String(form.get("className") ?? "").trim(),
+        dueDate: String(form.get("dueDate") ?? ""),
+        firebaseIdToken: await user.getIdToken(),
+        title: String(form.get("title") ?? "").trim(),
+      });
+      if (!result.success) throw new Error(result.error ?? "Unable to update the assignment");
+      await onUpdated();
+      setOpen(false);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Unable to update the assignment");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(nextOpen) => { setOpen(nextOpen); setErrorMessage(""); }}>
+      <DialogTrigger render={<button className="flex items-center gap-1.5 rounded-full border-2 border-black bg-white px-3 py-1.5 text-xs font-black" type="button" />}>
+        <Pencil className="size-3.5" /> Edit
+      </DialogTrigger>
+      <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl border-2 border-black sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Edit personal assignment</DialogTitle>
+          <DialogDescription>Only the account that created this assignment can change it.</DialogDescription>
+        </DialogHeader>
+        <form className="space-y-4" onSubmit={save}>
+          <label className="block space-y-2 text-sm font-medium">Assignment title<input className="w-full rounded-xl border-2 border-black bg-white px-3 py-2.5" defaultValue={assignment.title} maxLength={100} minLength={3} name="title" required /></label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block space-y-2 text-sm font-medium">Class or subject<input className="w-full rounded-xl border-2 border-black bg-white px-3 py-2.5" defaultValue={assignment.className} maxLength={60} minLength={2} name="className" required /></label>
+            <label className="block space-y-2 text-sm font-medium">Type<select className="w-full rounded-xl border-2 border-black bg-white px-3 py-2.5 capitalize" defaultValue={defaultKind} name="assignmentKind">{assignmentKinds.map((kind) => <option className="capitalize" key={kind} value={kind}>{kind}</option>)}</select></label>
+          </div>
+          <label className="block space-y-2 text-sm font-medium">Due date<input className="w-full rounded-xl border-2 border-black bg-white px-3 py-2.5" defaultValue={assignment.dueDate} name="dueDate" required type="date" /></label>
+          <label className="block space-y-2 text-sm font-medium">Assignment summary<textarea className="min-h-28 w-full rounded-xl border-2 border-black bg-white px-3 py-2.5" defaultValue={assignment.assignmentSummary} maxLength={1500} minLength={5} name="assignmentSummary" required /></label>
+          {errorMessage && <p className="rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{errorMessage}</p>}
+          <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-3 font-black text-white disabled:opacity-50" disabled={isSaving} type="submit">{isSaving && <Loader2 className="size-4 animate-spin" />}{isSaving ? "Saving…" : "Save changes"}</button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export default function ParentDashboard({
   dashboardView,
@@ -200,10 +278,16 @@ export default function ParentDashboard({
                     {assignment.lastProgressSummary && <p className="mt-2 text-xs leading-5 text-zinc-700"><strong>Latest reviewed progress:</strong> {assignment.lastProgressSummary}</p>}
                     {assignment.remainingWorkSummary && <p className="mt-2 text-xs leading-5 text-zinc-700"><strong>Still to do:</strong> {assignment.remainingWorkSummary}</p>}
                     {assignment.createdById === user.uid && (
-                      <button className="mt-3 flex items-center gap-1.5 rounded-full border-2 border-red-700 bg-white px-3 py-1.5 text-xs font-black text-red-700 disabled:opacity-50" disabled={deletingCid === assignment.id} onClick={() => void deletePersonalAssignment(assignment.id, assignment.title)} type="button">
-                        {deletingCid === assignment.id ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
-                        {deletingCid === assignment.id ? "Deleting…" : "Delete personal assignment"}
-                      </button>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <ParentAssignmentEditor assignment={assignment} onUpdated={loadDashboard} user={user} />
+                        <button className="flex items-center gap-1.5 rounded-full border-2 border-red-700 bg-white px-3 py-1.5 text-xs font-black text-red-700 disabled:opacity-50" disabled={deletingCid === assignment.id} onClick={() => void deletePersonalAssignment(assignment.id, assignment.title)} type="button">
+                          {deletingCid === assignment.id ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+                          {deletingCid === assignment.id ? "Deleting…" : "Delete"}
+                        </button>
+                      </div>
+                    )}
+                    {assignment.source !== "school" && assignment.createdById !== user.uid && (
+                      <p className="mt-3 text-xs font-semibold text-zinc-500">Only the account that created this personal assignment can edit or delete it.</p>
                     )}
                   </article>
                 );
