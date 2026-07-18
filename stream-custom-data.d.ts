@@ -15,6 +15,7 @@ declare module "stream-chat" {
       | "quiz"
       | "reading"
       | "test";
+    assignment_creator_id?: string;
     assignment_summary?: string;
     assignment_source?: "independent" | "personal" | "school";
     amended_due_date?: string;

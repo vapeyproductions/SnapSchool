@@ -564,7 +564,11 @@ export const getParentDashboard = async (firebaseIdToken: string) => {
             classId: channel.data?.class_id ?? "",
             className: channel.data?.class_name ?? "Class",
             completedSteps,
-            createdById: channel.data?.created_by_id ?? "",
+            createdById:
+              channel.data?.assignment_creator_id ??
+              channel.data?.created_by_id ??
+              channel.data?.created_by?.id ??
+              "",
             currentMission: parseDailyMission(channel.data?.daily_plan, completedSteps),
             dailyPlan: parseDailyPlan(channel.data?.daily_plan),
             dueDate: channel.data?.due_date ?? "",

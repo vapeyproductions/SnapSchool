@@ -24,6 +24,25 @@ type AssignmentChannelArgs = {
   title: string;
 };
 
+const getAssignmentCreatorId = (data: unknown) => {
+  if (!data || typeof data !== "object") return "";
+  const channelData = data as {
+    assignment_creator_id?: unknown;
+    created_by?: { id?: unknown };
+    created_by_id?: unknown;
+  };
+  const candidates = [
+    channelData.assignment_creator_id,
+    channelData.created_by_id,
+    channelData.created_by?.id,
+  ];
+  const creatorId = candidates.find(
+    (candidate): candidate is string =>
+      typeof candidate === "string" && Boolean(candidate.trim()),
+  );
+  return creatorId?.trim() ?? "";
+};
+
 type FirebaseAccount = {
   displayName?: string;
   localId?: string;
@@ -841,9 +860,7 @@ export const updateSchoolClass = async (data: {
                   .replace(/[^a-zA-Z0-9_-]/g, "")
                   .slice(0, 16);
                 const creatorId =
-                  typeof templateData?.created_by_id === "string"
-                    ? templateData.created_by_id
-                    : administrator.uid;
+                  getAssignmentCreatorId(templateData) || administrator.uid;
                 const title =
                   templateData?.assignment_title ??
                   templateData?.name ??
@@ -855,6 +872,7 @@ export const updateSchoolClass = async (data: {
                   `individual-added-${fingerprint}-${studentSuffix}`,
                   {
                     assignment_kind: templateData?.assignment_kind,
+                    assignment_creator_id: creatorId,
                     assignment_source: "school",
                     assignment_summary: templateData?.assignment_summary,
                     assignment_title: title,
@@ -1022,6 +1040,7 @@ export const createClassAssignment = async (data: {
           `individual-${slug}-${batchId}-${index + 1}`,
           {
             ...planData,
+            assignment_creator_id: administrator.uid,
             assignment_title: title,
             assignment_type: "individual",
             class_id: schoolClass.id,
@@ -1124,6 +1143,7 @@ export const createPersonalAssignment = async (data: {
       `personal-${slug}-${requestId.slice(0, 12)}`,
       {
         ...planData,
+        assignment_creator_id: creator.uid,
         assignment_source: "personal",
         assignment_title: title,
         assignment_type: "individual",
@@ -1267,6 +1287,7 @@ export const createClassGroupAssignment = async (data: {
           `group-${slug}-${batchId}-${index + 1}`,
           {
             ...planData,
+            assignment_creator_id: administrator.uid,
             assignment_title: title,
             assignment_type: "group",
             class_id: schoolClass.id,
@@ -1461,6 +1482,7 @@ export const createAssignmentChannel = async (
       generateAssignmentChannelId(data.assignmentType, title),
       {
         ...planData,
+        assignment_creator_id: creator.uid,
         assignment_title: title,
         assignment_type: data.assignmentType,
         class_id: schoolClass?.id,
@@ -1555,7 +1577,7 @@ const loadAuthorizedAssignmentChannels = async (
   } else if (
     channels.some(
       ({ data }) =>
-        data.created_by_id !== caller.uid ||
+        getAssignmentCreatorId(data) !== caller.uid ||
         (data.assignment_source !== "personal" &&
           data.assignment_source !== "independent"),
     )
@@ -1679,23 +1701,16 @@ export const deletePublishedAssignment = async (data: {
     );
 
     const hasDifferentCreator = channels.some(({ data: channelData }) => {
-      const creatorId =
-        typeof channelData.created_by_id === "string"
-          ? channelData.created_by_id.trim()
-          : "";
+      const creatorId = getAssignmentCreatorId(channelData);
       return Boolean(creatorId) && creatorId !== creator.uid;
     });
     if (hasDifferentCreator) {
       throw new Error("Only the person who created this assignment can delete it");
     }
 
-    const legacyChannels = channels.filter(({ data: channelData }) => {
-      const creatorId =
-        typeof channelData.created_by_id === "string"
-          ? channelData.created_by_id.trim()
-          : "";
-      return !creatorId;
-    });
+    const legacyChannels = channels.filter(
+      ({ data: channelData }) => !getAssignmentCreatorId(channelData),
+    );
     if (legacyChannels.length > 0) {
       if (creator.role !== "administrator") {
         throw new Error("Only the person who created this assignment can delete it");

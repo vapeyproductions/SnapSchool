@@ -87,7 +87,7 @@ function StudentAssignmentCalendar({
   const classOptions = useMemo(() => {
     const options = new Map<string, string>();
     assignments.forEach((assignment) => {
-      const id = assignment.classId || `class:${assignment.className.trim().toLowerCase()}`;
+      const id = `class:${assignment.className.trim().toLowerCase()}`;
       if (!options.has(id)) options.set(id, assignment.className);
     });
     return [...options.entries()]
@@ -102,7 +102,7 @@ function StudentAssignmentCalendar({
     ? assignments
     : assignments.filter(
         (assignment) =>
-          (assignment.classId || `class:${assignment.className.trim().toLowerCase()}`) === selectedClassId,
+          `class:${assignment.className.trim().toLowerCase()}` === selectedClassId,
       );
 
   return (
