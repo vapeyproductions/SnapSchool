@@ -46,7 +46,7 @@ export type ParentEmailPreferences = {
   urgentThresholdHours: number;
 };
 
-export const defaultParentEmailPreferences: ParentEmailPreferences = {
+const defaultParentEmailPreferences: ParentEmailPreferences = {
   enabled: false,
   mode: "due_only",
   timeZone: "America/New_York",

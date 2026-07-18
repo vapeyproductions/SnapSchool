@@ -5,7 +5,6 @@ import { useContext, useEffect, useMemo, useState } from "react";
 
 import {
   getProfileSettings,
-  defaultParentEmailPreferences,
   removeFamilyConnection,
   requestParentConnection,
   respondToParentConnection,
@@ -18,6 +17,13 @@ import { getAvatarChoices } from "@/lib/avatar-options";
 import { changeAvatar, changeUsername } from "@/lib/server";
 
 import AuthContext from "./AuthContext";
+
+const defaultParentEmailPreferences: ParentEmailPreferences = {
+  enabled: false,
+  mode: "due_only",
+  timeZone: "America/New_York",
+  urgentThresholdHours: 1.5,
+};
 
 export default function ProfileSettingsModal() {
   const { role, user } = useContext(AuthContext);
