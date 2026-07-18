@@ -39,6 +39,7 @@ export default function CreateStreakModal({
   const [classId, setClassId] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [dueDateManuallySet, setDueDateManuallySet] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [analysis, setAnalysis] = useState<AssignmentAnalysis | null>(null);
   const [title, setTitle] = useState("");
@@ -88,7 +89,7 @@ export default function CreateStreakModal({
     try {
       const formData = new FormData();
       formData.set("description", description.trim());
-      formData.set("dueDate", dueDate);
+      if (dueDateManuallySet && dueDate) formData.set("dueDateOverride", dueDate);
       if (file) formData.set("file", file);
 
       const response = await fetch("/api/assignments/analyze", {
@@ -110,7 +111,9 @@ export default function CreateStreakModal({
 
       setAnalysis(result.analysis);
       setTitle(result.analysis.suggestedTitle);
-      if (!dueDate && result.analysis.detectedDueDate) setDueDate(result.analysis.detectedDueDate);
+      if (!dueDateManuallySet && result.analysis.detectedDueDate) {
+        setDueDate(result.analysis.detectedDueDate);
+      }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Unable to analyze this assignment");
     } finally {
@@ -205,7 +208,7 @@ export default function CreateStreakModal({
           </label>
           <label className="block space-y-2 text-sm font-medium">
             Due date (optional before analysis)
-            <span className="relative block"><CalendarDays className="absolute left-3 top-3 size-4 text-slate-400" /><input className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-3" min={new Date().toISOString().slice(0, 10)} onChange={(event) => setDueDate(event.target.value)} type="date" value={dueDate} /></span>
+            <span className="relative block"><CalendarDays className="absolute left-3 top-3 size-4 text-slate-400" /><input className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-3" min={new Date().toISOString().slice(0, 10)} onChange={(event) => { setDueDate(event.target.value); setDueDateManuallySet(Boolean(event.target.value)); }} type="date" value={dueDate} /></span>
             <span className="block text-xs font-normal text-slate-500">Your date overrides one detected in the uploaded assignment.</span>
           </label>
           <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 font-medium text-white hover:bg-indigo-700 disabled:opacity-60" disabled={isAnalyzing || (!description.trim() && !file)} onClick={() => void analyzeAssignment()} type="button">
@@ -218,7 +221,7 @@ export default function CreateStreakModal({
           <div className="space-y-4 rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4">
             <div><p className="font-semibold text-emerald-950">Review the suggested plan</p><p className="text-xs text-slate-600">AI estimates can be wrong. Confirm the title, due date, and workload before assigning.</p></div>
             <label className="block space-y-2 text-sm font-medium">Assignment title<input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5" maxLength={100} minLength={3} onChange={(event) => setTitle(event.target.value)} required value={title} /></label>
-            <label className="block space-y-2 text-sm font-medium">Due date (required)<input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5" min={new Date().toISOString().slice(0, 10)} onChange={(event) => setDueDate(event.target.value)} required type="date" value={dueDate} /></label>
+            <label className="block space-y-2 text-sm font-medium">Due date (required)<input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5" min={new Date().toISOString().slice(0, 10)} onChange={(event) => { setDueDate(event.target.value); setDueDateManuallySet(Boolean(event.target.value)); }} required type="date" value={dueDate} /></label>
             <div className="grid grid-cols-2 gap-3 text-sm"><div className="rounded-xl bg-white p-3"><span className="block text-slate-500">Estimated effort</span><strong>{analysis.estimatedTotalMinutes} minutes</strong></div><div className="rounded-xl bg-white p-3"><span className="block text-slate-500">Streak target</span><strong>{analysis.recommendedWorkDays} work days</strong></div></div>
             <div className="text-sm"><p className="font-medium">Summary</p><p className="mt-1 leading-6 text-slate-600">{analysis.assignmentSummary}</p></div>
             <div className="text-sm"><p className="font-medium">Why this workload</p><p className="mt-1 leading-6 text-slate-600">{analysis.workloadRationale}</p></div>

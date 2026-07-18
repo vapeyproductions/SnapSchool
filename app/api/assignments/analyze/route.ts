@@ -220,7 +220,7 @@ export async function POST(request: Request) {
     }
 
     const description = String(formData.get("description") ?? "").trim();
-    const teacherDueDate = String(formData.get("dueDate") ?? "").trim();
+    const teacherDueDate = String(formData.get("dueDateOverride") ?? "").trim();
     const groupWorkerCountRaw = String(formData.get("groupWorkerCount") ?? "").trim();
     const groupCountRaw = String(formData.get("groupCount") ?? "").trim();
     const groupWorkerCount = groupWorkerCountRaw
@@ -243,7 +243,7 @@ export async function POST(request: Request) {
     const content: Array<Record<string, unknown>> = [{
       text:
         `Analyze this school assignment for the person organizing it. Today is ${new Date().toISOString().slice(0, 10)}.\n` +
-        `Provided due date: ${teacherDueDate || "none"}. A provided date overrides any date found in the source.\n` +
+        `Teacher-entered due-date override: ${teacherDueDate || "none"}. Only this explicitly entered override supersedes dates found in the source.\n` +
         `This plan will be shared once across ${groupCount} group${groupCount === 1 ? "" : "s"}. The smallest group has ${groupWorkerCount} student workers, so make every step achievable by that group size.\n` +
         `Teacher description: ${description || "none"}.\n\n` +
         "Extract a concise title and the actual deliverables. Estimate realistic student work time. " +
@@ -253,6 +253,8 @@ export async function POST(request: Request) {
           ? "This is a collaborative assignment. Account for the number of workers, identify tasks that can happen in parallel, include coordination and integration checkpoints, and make each daily step a concrete shared team outcome rather than multiplying the workload by the group size. "
           : "") +
         "Use calendar time between today and the due date when one is known. Do not invent a due date. " +
+        "When the source is a schedule containing several dated milestones, preserve those milestones in the summary and plan and use the final relevant deadline as detectedDueDate. If dates omit a year, resolve them to the nearest future occurrence that preserves the source's chronological order. Never substitute today's date for an undated or yearless deadline. " +
+        "For a dated reading schedule, prefer one concrete task per reading or assessment milestone, with limited preparation tasks where useful; do not create a separate task for every calendar day. " +
         "SPECIAL RULE FOR TESTS, QUIZZES, AND EXAMS: Create a study plan rather than a completion checklist. " +
         "Divide the tested topics across days, name the specific material to review, and include active recall, practice questions, and spaced review. " +
         "Use early sessions for focused topic review, middle sessions for retrieval and targeted practice, and the final session for cumulative mixed practice and a readiness check rather than substantial new material. " +
@@ -274,7 +276,7 @@ export async function POST(request: Request) {
         instructions:
           "You are an educational workload and study-plan designer. Produce concrete, age-appropriate daily actions grounded only in the provided assignment source. Distinguish preparation for an assessment from production work, and follow every assessment-specific planning rule in the user request.",
         input: [{ content, role: "user" }],
-        max_output_tokens: 3000,
+        max_output_tokens: 10000,
         model: "gpt-5.6",
         reasoning: { effort: "medium" },
         safety_identifier: createHash("sha256").update(plannerId).digest("hex"),
@@ -286,16 +288,32 @@ export async function POST(request: Request) {
     });
     const result = (await openAIResponse.json()) as {
       error?: { message?: string };
+      incomplete_details?: { reason?: string };
       output?: Array<{ content?: Array<{ refusal?: string; text?: string; type?: string }>; type?: string }>;
+      status?: string;
     };
 
     if (!openAIResponse.ok) throw new Error(result.error?.message ?? "OpenAI could not analyze the assignment");
+    if (result.status === "incomplete") {
+      throw new Error(
+        result.incomplete_details?.reason === "max_output_tokens"
+          ? "The assignment plan was longer than the AI response limit. Please analyze it again."
+          : "The AI could not finish the assignment plan. Please analyze it again.",
+      );
+    }
     const outputContent = result.output?.find((item) => item.type === "message")
       ?.content?.find((item) => item.type === "output_text");
     if (outputContent?.refusal) return errorResponse("The assignment could not be analyzed safely", 422);
     if (!outputContent?.text) throw new Error("OpenAI returned no assignment analysis");
 
-    return Response.json({ analysis: parseAssignmentAnalysis(JSON.parse(outputContent.text)) });
+    try {
+      return Response.json({ analysis: parseAssignmentAnalysis(JSON.parse(outputContent.text)) });
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        throw new Error("The AI response ended before the assignment plan was complete. Please analyze it again.");
+      }
+      throw error;
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to analyze assignment";
     const status = /session|signed in/i.test(message) ? 401 : /cannot|only|approve|school-connected/i.test(message) ? 403 : 500;
