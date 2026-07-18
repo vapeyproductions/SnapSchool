@@ -156,7 +156,9 @@ export async function POST(request: Request) {
     const files = (submittedFiles.length ? submittedFiles : [legacyFile]).filter(
       (value): value is File => value instanceof File && value.size > 0,
     );
-    if (!files.length) return errorResponse("Upload a screenshot, photo, or document of your progress", 400);
+    if (!files.length && !note) {
+      return errorResponse("Describe what you completed or upload a screenshot, photo, or document", 400);
+    }
     if (files.length > MAX_FILES) return errorResponse(`Upload no more than ${MAX_FILES} photos`, 400);
     if (files.some((file) => file.size > MAX_FILE_BYTES)) return errorResponse("Each progress file must be 10 MB or smaller", 400);
     if (files.reduce((sum, file) => sum + file.size, 0) > MAX_TOTAL_FILE_BYTES) {
@@ -260,7 +262,7 @@ export async function POST(request: Request) {
     })));
     const content: Array<Record<string, unknown>> = [{
       text:
-        `Review a student's visible progress evidence for the assignment "${channel.data.assignment_title}".\n` +
+        `Review a student's progress update for the assignment "${channel.data.assignment_title}".\n` +
         `Assignment kind: ${channel.data.assignment_kind ?? "other"}. For a test, quiz, or exam, evidence may include notes, flashcards, practice questions, corrections, or other visible study work; evaluate preparation progress rather than a finished deliverable.\n` +
         (isGroupAssignment
           ? `This is a shared group assignment with ${groupMemberCount} channel members. Review progress toward the team's shared outcome, not only the submitting student's individual effort. Previously reviewed member contributions: ${JSON.stringify(groupContributions)}. Recent visible group activity: ${JSON.stringify(recentGroupActivity)}. Use this activity to recognize work members have reported or shared, identify visible gaps, and propose coordinated next steps. Do not assume unreported work is complete.\n`
@@ -270,11 +272,11 @@ export async function POST(request: Request) {
         `Assignment summary: ${channel.data.assignment_summary ?? "Not provided"}.\n` +
         `Previously completed work days: ${completedWorkDays}.\n` +
         `Remaining plan: ${JSON.stringify(remainingTasks)}.\n` +
-        `Student note: ${note || "none"}.\n\n` +
-        `The student uploaded ${files.length} evidence ${files.length === 1 ? "file" : "files"}. Treat multiple photos as pages or views of the same progress submission and avoid double-counting repeated content. ` +
-        "Read the printed and handwritten text that is visible in every uploaded image. For worksheets, compare visibly answered, attempted, or completed questions and sections with the total questions and sections visible across the images, and estimate an overall completion percentage. " +
-        "Judge only work visibly supported by the uploaded evidence; do not infer hidden work and do not grade correctness. If part of the worksheet is outside the photo, state that limitation in warnings and lower confidence instead of assuming it is complete. " +
-        "Set progressSufficient true only when the evidence shows meaningful progress toward today's planned assignment work. " +
+        `Student progress statement: ${note || "none"}.\n\n` +
+        (files.length > 0
+          ? `The student uploaded ${files.length} evidence ${files.length === 1 ? "file" : "files"}. Treat multiple photos as pages or views of the same progress submission and avoid double-counting repeated content. Read the printed and handwritten text that is visible in every uploaded image. For worksheets, compare visibly answered, attempted, or completed questions and sections with the total questions and sections visible across the images, and estimate an overall completion percentage. Judge only work visibly supported by the uploaded evidence; do not infer hidden work and do not grade correctness. If part of the worksheet is outside the photo, state that limitation in warnings and lower confidence instead of assuming it is complete. `
+          : "The student submitted a written progress statement without a file. For reading and other tasks that do not naturally create visible evidence, accept a specific self-report when it clearly matches today's mission. For example, 'I read Chapter 1' is sufficient when Chapter 1 is today's assigned reading. Label the work as self-reported, use medium confidence unless the statement includes useful specifics, and do not demand photographic proof for inherently non-visual work. Reject only statements that are too vague, unrelated, or do not claim meaningful progress toward today's task. ") +
+        "Set progressSufficient true only when the submitted update shows meaningful progress toward today's planned assignment work. " +
         "Then describe what is complete, what remains, and rebuild the remaining plan so it fits within the planning window. " +
         (isGroupAssignment
           ? "For the revised group plan, use concrete team outcomes, parallel work where appropriate, and coordination or integration checkpoints. "

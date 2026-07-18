@@ -107,14 +107,15 @@ export default function CreateStreakModal({
       if (!response.ok || !result.analysis) {
         throw new Error(result.error ?? "Unable to analyze this assignment");
       }
-      if (!result.analysis.inputValid) {
-        throw new Error(result.analysis.warnings[0] ?? "The uploaded content does not look like a readable assignment");
-      }
-
       setAnalysis(result.analysis);
       setTitle(result.analysis.suggestedTitle);
       if (!dueDateManuallySet && result.analysis.detectedDueDate) {
         setDueDate(result.analysis.detectedDueDate);
+      }
+      if (!result.analysis.inputValid) {
+        setErrorMessage(
+          "The AI needs more information. Review its notes below, add a correction or clarification, and update the plan.",
+        );
       }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Unable to analyze this assignment");
@@ -132,6 +133,10 @@ export default function CreateStreakModal({
     }
     if (!analysis) {
       setErrorMessage("Analyze and review the assignment before creating it");
+      return;
+    }
+    if (!analysis.inputValid) {
+      setErrorMessage("Clarify the assignment and update the AI plan before publishing");
       return;
     }
     if (!dueDate) {
@@ -222,29 +227,29 @@ export default function CreateStreakModal({
         {analysis && (
           <div className="space-y-4 rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4">
             <div><p className="font-semibold text-emerald-950">Review the suggested plan</p><p className="text-xs text-slate-600">AI estimates can be wrong. Confirm the title, due date, and workload before assigning.</p></div>
+            {analysis.warnings.length > 0 && <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"><strong>Check before assigning:</strong><ul className="mt-1 list-disc pl-5">{analysis.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div>}
+            <div className="rounded-xl border-2 border-indigo-400 bg-indigo-50 p-4">
+              <label className="block space-y-2 text-sm font-semibold text-indigo-950">
+                Teacher corrections or clarification
+                <textarea className="min-h-28 w-full rounded-xl border border-indigo-300 bg-white px-3 py-2.5 font-normal text-slate-900" maxLength={4000} onChange={(event) => setClarification(event.target.value)} placeholder="Correct dates, explain quiz coverage, add missing page numbers, or clarify any other issue the AI identified." value={clarification} />
+              </label>
+              <button className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 font-semibold text-white disabled:opacity-60" disabled={isAnalyzing || !clarification.trim()} onClick={() => void analyzeAssignment()} type="button">
+                {isAnalyzing ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+                Re-analyze with my clarification
+              </button>
+            </div>
             <label className="block space-y-2 text-sm font-medium">Assignment title<input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5" maxLength={100} minLength={3} onChange={(event) => setTitle(event.target.value)} required value={title} /></label>
             <label className="block space-y-2 text-sm font-medium">Due date (required)<input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5" min={new Date().toISOString().slice(0, 10)} onChange={(event) => { setDueDate(event.target.value); setDueDateManuallySet(Boolean(event.target.value)); }} required type="date" value={dueDate} /></label>
             <div className="grid grid-cols-2 gap-3 text-sm"><div className="rounded-xl bg-white p-3"><span className="block text-slate-500">Estimated effort</span><strong>{analysis.estimatedTotalMinutes} minutes</strong></div><div className="rounded-xl bg-white p-3"><span className="block text-slate-500">Streak target</span><strong>{analysis.recommendedWorkDays} work days</strong></div></div>
             <div className="text-sm"><p className="font-medium">Summary</p><p className="mt-1 leading-6 text-slate-600">{analysis.assignmentSummary}</p></div>
             <div className="text-sm"><p className="font-medium">Why this workload</p><p className="mt-1 leading-6 text-slate-600">{analysis.workloadRationale}</p></div>
             <div><p className="text-sm font-medium">{["test", "quiz", "exam"].includes(analysis.assignmentKind) ? "Daily study plan" : "Daily plan"}</p><ol className="mt-2 space-y-2">{analysis.dailyTasks.map((task) => <li className="rounded-xl bg-white p-3 text-sm" key={task.dayNumber}><div className="flex justify-between gap-3"><strong>Day {task.dayNumber}: {task.title}</strong><span className="shrink-0 text-slate-500">{task.estimatedMinutes} min</span></div><p className="mt-1 leading-5 text-slate-600">{task.description}</p></li>)}</ol></div>
-            {analysis.warnings.length > 0 && <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800"><strong>Check before assigning:</strong><ul className="mt-1 list-disc pl-5">{analysis.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div>}
-            <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3">
-              <label className="block space-y-2 text-sm font-medium">
-                Correct or clarify the AI analysis
-                <textarea className="min-h-24 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5" maxLength={4000} onChange={(event) => setClarification(event.target.value)} placeholder="Example: Use July 27–28 as printed. Each reading check only covers the chapters immediately before it. Our edition ends on page 202." value={clarification} />
-              </label>
-              <button className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 font-semibold text-white disabled:opacity-60" disabled={isAnalyzing || !clarification.trim()} onClick={() => void analyzeAssignment()} type="button">
-                {isAnalyzing ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-                Update plan with clarification
-              </button>
-            </div>
           </div>
         )}
 
         {errorMessage && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{errorMessage}</p>}
         {analysis && (
-          <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-60" disabled={isCreating || !dueDate || !title.trim() || !classId} type="submit">
+          <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-60" disabled={isCreating || !analysis.inputValid || !dueDate || !title.trim() || !classId} type="submit">
             {isCreating && <Loader2 className="size-4 animate-spin" />}
             {isCreating ? "Creating assignments..." : `Publish to ${classes.find((item) => item.id === classId)?.name ?? "class"}`}
           </button>

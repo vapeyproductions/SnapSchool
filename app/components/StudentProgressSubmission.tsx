@@ -80,8 +80,8 @@ export function StudentProgressSubmission() {
     setErrorMessage("");
     setResult(null);
 
-    if (!files.length) {
-      setErrorMessage("Choose a screenshot, photo, or document first");
+    if (!files.length && !note.trim()) {
+      setErrorMessage("Describe what you completed or add a photo or document");
       return;
     }
     if (files.some((file) => file.size > MAX_FILE_BYTES)) {
@@ -135,7 +135,7 @@ export function StudentProgressSubmission() {
           attachments,
           snapschool_event: "progress_evidence",
           text: note.trim()
-            ? `Progress evidence: ${note.trim()}`
+            ? `Progress update: ${note.trim()}`
             : "Progress evidence submitted for AI review.",
         });
 
@@ -150,7 +150,7 @@ export function StudentProgressSubmission() {
         }
       } catch {
         setErrorMessage(
-          "The AI review completed, but the evidence image could not be added to the assignment chat. Please try uploading it again from the chat.",
+          "The AI review completed, but the progress update could not be added to the assignment chat. Please try submitting it again.",
         );
       }
 
@@ -216,9 +216,9 @@ export function StudentProgressSubmission() {
           <Camera className="size-5" />
         </span>
         <div>
-          <p className="font-black tracking-tight text-black">Snap today&apos;s progress</p>
+          <p className="font-black tracking-tight text-black">Share today&apos;s progress</p>
           <p className="mt-0.5 text-xs font-medium leading-5 text-zinc-600">
-            Share visible work. AI checks it against today&apos;s mission and reshapes the plan if needed.
+            Write what you completed, or share visible work. AI checks it against today&apos;s mission and reshapes the plan if needed.
           </p>
         </div>
       </div>
@@ -259,18 +259,18 @@ export function StudentProgressSubmission() {
               Selected: {files.length === 1 ? files[0].name : `${files.length} worksheet photos`}
             </p>
           )}
-          <input
-            className="w-full rounded-2xl border-2 border-black bg-white px-3 py-2.5 text-sm outline-none focus:shadow-[2px_2px_0_#111]"
+          <textarea
+            className="min-h-20 w-full resize-y rounded-2xl border-2 border-black bg-white px-3 py-2.5 text-sm outline-none focus:shadow-[2px_2px_0_#111]"
             maxLength={2000}
             onChange={(event) => setNote(event.target.value)}
-            placeholder="Optional: briefly explain what you completed"
+            placeholder="What did you complete? For example: I read Chapter 1 and wrote notes on the main characters."
             value={note}
           />
-          <p className="text-[11px] font-medium text-zinc-500">Maximum 10 MB. Keep grades and unrelated private information out of frame.</p>
+          <p className="text-[11px] font-medium text-zinc-500">For reading or other work without visible proof, a specific written update is enough. Files are optional.</p>
         </div>
         <button
           className="flex items-center justify-center gap-2 self-start rounded-full border-2 border-black bg-[#fffc00] px-5 py-3 text-sm font-black text-black shadow-[3px_3px_0_#111] transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-50"
-          disabled={isSubmitting || !files.length}
+          disabled={isSubmitting || (!files.length && !note.trim())}
           type="submit"
         >
           {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
