@@ -69,6 +69,8 @@ export type ParentAssignmentSummary = {
   dueDate: string;
   id: string;
   lastProgressSummary: string | null;
+  lastProgressAt: string | null;
+  lateAmendment: boolean;
   progressPercent: number;
   remainingWorkSummary: string | null;
   source: "independent" | "personal" | "school";
@@ -638,11 +640,11 @@ const queryAllStudentChannels = async (
 ) => {
   const channels = [];
   const pageSize = 30;
-  for (let offset = 0; offset < 300; offset += pageSize) {
+  for (let offset = 0; offset < 1000; offset += pageSize) {
     const page = await streamClient.queryChannels(
       { members: { $in: [studentUid] }, type },
-      { last_message_at: -1 },
-      { limit: pageSize, offset, state: false, watch: false },
+      { created_at: -1 },
+      { limit: pageSize, offset, state: true, watch: false },
     );
     channels.push(...page);
     if (page.length < pageSize) break;
@@ -735,8 +737,8 @@ export const getParentDashboard = async (firebaseIdToken: string) => {
 
     const children = await Promise.all(connections.map(async (connection) => {
       const [individual, group] = await Promise.all([
-        streamClient.queryChannels({ members: { $in: [connection.studentUid] }, type: "messaging" }, { last_message_at: -1 }, { state: true, watch: false }),
-        streamClient.queryChannels({ members: { $in: [connection.studentUid] }, type: "livestream" }, { last_message_at: -1 }, { state: true, watch: false }),
+        queryAllStudentChannels(streamClient, connection.studentUid, "messaging"),
+        queryAllStudentChannels(streamClient, connection.studentUid, "livestream"),
       ]);
       const assignments = [...individual, ...group]
         .filter((channel) => {
@@ -767,7 +769,9 @@ export const getParentDashboard = async (firebaseIdToken: string) => {
             dailyPlan: parseDailyPlan(channel.data?.daily_plan),
             dueDate: channel.data?.due_date ?? "",
             id: channel.cid,
+            lastProgressAt: channel.data?.last_progress_at ?? null,
             lastProgressSummary: channel.data?.last_progress_summary ?? null,
+            lateAmendment: channel.data?.late_amendment === true,
             progressPercent: targetSteps > 0 ? Math.min(100, Math.round((completedSteps / targetSteps) * 100)) : 0,
             remainingWorkSummary: channel.data?.remaining_work_summary ?? null,
             source: channel.data?.assignment_source ?? "school",

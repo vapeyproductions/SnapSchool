@@ -2,7 +2,7 @@
 
 import type { User } from "firebase/auth";
 import { CalendarDays, CheckCircle2, Clock3, Loader2, Pencil, ShieldCheck, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { getParentDashboard, type ParentAssignmentSummary, type ParentChildDashboard } from "@/actions/profile";
 import { deletePublishedAssignment, updatePublishedAssignment } from "@/actions/stream";
@@ -14,6 +14,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { buildBalancedAssignmentSchedules } from "@/lib/assignment-schedule";
 import AssignmentCalendar from "./AssignmentCalendar";
 
 const formatDate = (date: string) => date
@@ -173,6 +174,26 @@ export default function ParentDashboard({
     return () => window.removeEventListener("snapschool:assignment-created", refreshAfterCreation);
   });
 
+  const schedulesByChild = useMemo(
+    () => new Map(
+      children.map((child) => [
+        child.studentUid,
+        buildBalancedAssignmentSchedules(
+          child.assignments.map((assignment) => ({
+            className: assignment.className,
+            completedSteps: assignment.completedSteps,
+            dailyPlan: assignment.dailyPlan,
+            dueDate: assignment.dueDate,
+            id: assignment.id,
+            lastProgressAt: assignment.lastProgressAt ?? undefined,
+            lateAmendment: assignment.lateAmendment,
+          })),
+        ),
+      ]),
+    ),
+    [children],
+  );
+
   if (isLoading) {
     return <div className="flex min-h-[34rem] items-center justify-center gap-2 text-sm font-semibold text-zinc-500"><Loader2 className="size-5 animate-spin" /> Loading family progress…</div>;
   }
@@ -247,6 +268,8 @@ export default function ParentDashboard({
                     ownerName: child.studentDisplayName,
                     targetSteps: assignment.targetSteps,
                     title: assignment.title,
+                    workSchedule:
+                      schedulesByChild.get(child.studentUid)?.[assignment.id] ?? [],
                   })))}
                 emptyMessage={calendarChildUid === "all" ? "No connected students have active assignments scheduled." : `${calendarChildren[0]?.studentDisplayName ?? "This student"} has no active assignments scheduled.`}
                 onAssignmentSelect={(calendarAssignmentId) => {
