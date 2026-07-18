@@ -9,6 +9,8 @@ import { parseProgressAnalysis } from "@/lib/progress-analysis";
 export const runtime = "nodejs";
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_FILES = 6;
+const MAX_TOTAL_FILE_BYTES = 12 * 1024 * 1024;
 const IMAGE_TYPES = new Set(["image/gif", "image/jpeg", "image/png", "image/webp"]);
 const DOCUMENT_TYPES = new Set([
   "application/msword",
@@ -149,12 +151,22 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const channelCid = String(formData.get("channelCid") ?? "").trim();
     const note = String(formData.get("note") ?? "").trim();
-    const fileValue = formData.get("file");
-    const file = fileValue instanceof File && fileValue.size > 0 ? fileValue : null;
-    if (!file) return errorResponse("Upload a screenshot, photo, or document of your progress", 400);
-    if (file.size > MAX_FILE_BYTES) return errorResponse("The progress file must be 10 MB or smaller", 400);
-    if (!IMAGE_TYPES.has(file.type) && !DOCUMENT_TYPES.has(file.type)) {
-      return errorResponse("Upload a PNG, JPEG, WebP, GIF, PDF, Word, or text file", 400);
+    const submittedFiles = formData.getAll("files");
+    const legacyFile = formData.get("file");
+    const files = (submittedFiles.length ? submittedFiles : [legacyFile]).filter(
+      (value): value is File => value instanceof File && value.size > 0,
+    );
+    if (!files.length) return errorResponse("Upload a screenshot, photo, or document of your progress", 400);
+    if (files.length > MAX_FILES) return errorResponse(`Upload no more than ${MAX_FILES} photos`, 400);
+    if (files.some((file) => file.size > MAX_FILE_BYTES)) return errorResponse("Each progress file must be 10 MB or smaller", 400);
+    if (files.reduce((sum, file) => sum + file.size, 0) > MAX_TOTAL_FILE_BYTES) {
+      return errorResponse("The progress files must be 12 MB or smaller in total", 400);
+    }
+    if (files.length > 1 && files.some((file) => !IMAGE_TYPES.has(file.type))) {
+      return errorResponse("Upload either one document or up to six worksheet photos", 400);
+    }
+    if (files.some((file) => !IMAGE_TYPES.has(file.type) && !DOCUMENT_TYPES.has(file.type))) {
+      return errorResponse("Upload PNG, JPEG, WebP, GIF, PDF, Word, or text files", 400);
     }
     if (note.length > 2000) return errorResponse("The progress note must be 2,000 characters or less", 400);
 
@@ -242,7 +254,10 @@ export async function POST(request: Request) {
     const lastProgressDate = streakFields.lastProgressDate?.stringValue ?? null;
     const remainingTasks = currentTasks.slice(Math.min(completedWorkDays, currentTasks.length));
 
-    const dataUrl = `data:${file.type};base64,${Buffer.from(await file.arrayBuffer()).toString("base64")}`;
+    const evidenceFiles = await Promise.all(files.map(async (file) => ({
+      dataUrl: `data:${file.type};base64,${Buffer.from(await file.arrayBuffer()).toString("base64")}`,
+      file,
+    })));
     const content: Array<Record<string, unknown>> = [{
       text:
         `Review a student's visible progress evidence for the assignment "${channel.data.assignment_title}".\n` +
@@ -256,7 +271,8 @@ export async function POST(request: Request) {
         `Previously completed work days: ${completedWorkDays}.\n` +
         `Remaining plan: ${JSON.stringify(remainingTasks)}.\n` +
         `Student note: ${note || "none"}.\n\n` +
-        "Read the printed and handwritten text that is visible in the uploaded evidence. For worksheets, compare visibly answered, attempted, or completed questions and sections with the total questions and sections visible in the image, and estimate an overall completion percentage. " +
+        `The student uploaded ${files.length} evidence ${files.length === 1 ? "file" : "files"}. Treat multiple photos as pages or views of the same progress submission and avoid double-counting repeated content. ` +
+        "Read the printed and handwritten text that is visible in every uploaded image. For worksheets, compare visibly answered, attempted, or completed questions and sections with the total questions and sections visible across the images, and estimate an overall completion percentage. " +
         "Judge only work visibly supported by the uploaded evidence; do not infer hidden work and do not grade correctness. If part of the worksheet is outside the photo, state that limitation in warnings and lower confidence instead of assuming it is complete. " +
         "Set progressSufficient true only when the evidence shows meaningful progress toward today's planned assignment work. " +
         "Then describe what is complete, what remains, and rebuild the remaining plan so it fits within the planning window. " +
@@ -268,9 +284,11 @@ export async function POST(request: Request) {
         "The revisedDailyTasks array must contain exactly recommendedRemainingWorkDays tasks and must not exceed the planning window.",
       type: "input_text",
     }];
-    content.push(IMAGE_TYPES.has(file.type)
-      ? { detail: "high", image_url: dataUrl, type: "input_image" }
-      : { detail: file.type === "application/pdf" ? "high" : undefined, file_data: dataUrl, filename: file.name || "progress", type: "input_file" });
+    evidenceFiles.forEach(({ dataUrl, file }) => {
+      content.push(IMAGE_TYPES.has(file.type)
+        ? { detail: "high", image_url: dataUrl, type: "input_image" }
+        : { file_data: dataUrl, filename: file.name || "progress", type: "input_file" });
+    });
 
     const openAIResponse = await fetch("https://api.openai.com/v1/responses", {
       body: JSON.stringify({

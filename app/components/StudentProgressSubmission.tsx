@@ -16,13 +16,58 @@ type ProgressResult = {
 };
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_PHOTOS = 6;
+const MAX_UPLOAD_BYTES = 3.5 * 1024 * 1024;
+const MAX_IMAGE_DIMENSION = 2200;
+
+const canvasBlob = (
+  canvas: HTMLCanvasElement,
+  quality: number,
+): Promise<Blob> =>
+  new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => blob ? resolve(blob) : reject(new Error("The photo could not be prepared for upload")),
+      "image/jpeg",
+      quality,
+    );
+  });
+
+const optimizePhoto = async (file: File): Promise<File> => {
+  if (!file.type.startsWith("image/") || (file.size < 700_000 && file.type !== "image/heic" && file.type !== "image/heif")) {
+    return file;
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const element = new Image();
+      element.onload = () => resolve(element);
+      element.onerror = () => reject(new Error(`SchoolSnap could not read ${file.name}. Try a screenshot or JPEG photo.`));
+      element.src = objectUrl;
+    });
+    const scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(image.naturalWidth, image.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("The photo could not be prepared for upload");
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    let blob = await canvasBlob(canvas, 0.86);
+    if (blob.size > 1_200_000) blob = await canvasBlob(canvas, 0.72);
+    const baseName = file.name.replace(/\.[^.]+$/, "") || "worksheet-progress";
+    return new File([blob], `${baseName}.jpg`, { type: "image/jpeg" });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+};
 
 export function StudentProgressSubmission() {
   const { role, user } = useContext(AuthContext);
   const { channel } = useChannelStateContext("StudentProgressSubmission");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [note, setNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -35,11 +80,11 @@ export function StudentProgressSubmission() {
     setErrorMessage("");
     setResult(null);
 
-    if (!file) {
+    if (!files.length) {
       setErrorMessage("Choose a screenshot, photo, or document first");
       return;
     }
-    if (file.size > MAX_FILE_BYTES) {
+    if (files.some((file) => file.size > MAX_FILE_BYTES)) {
       setErrorMessage("The progress file must be 10 MB or smaller");
       return;
     }
@@ -48,34 +93,46 @@ export function StudentProgressSubmission() {
     try {
       const formData = new FormData();
       formData.set("channelCid", channel.cid);
-      formData.set("file", file);
+      files.forEach((file) => formData.append("files", file));
       formData.set("note", note.trim());
       const response = await fetch("/api/assignments/progress", {
         body: formData,
         headers: { Authorization: `Bearer ${await user.getIdToken()}` },
         method: "POST",
       });
-      const responseBody = (await response.json()) as ProgressResult & { error?: string };
+      const responseText = await response.text();
+      let responseBody: ProgressResult & { error?: string };
+      try {
+        responseBody = JSON.parse(responseText) as ProgressResult & { error?: string };
+      } catch {
+        throw new Error(
+          response.status === 413
+            ? "The selected photos are too large to upload. Try fewer photos or take screenshots of them."
+            : `The progress review service returned an unreadable response (${response.status}). Please try again.`,
+        );
+      }
       if (!response.ok) throw new Error(responseBody.error ?? "Unable to review this progress");
 
       setResult(responseBody);
       const analysis = responseBody.analysis;
-      const isImage = file.type.startsWith("image/");
       try {
-        const upload = isImage
-          ? await channel.sendImage(file, file.name, file.type)
-          : await channel.sendFile(file, file.name, file.type);
+        const attachments = [];
+        for (const evidenceFile of files) {
+          const isImage = evidenceFile.type.startsWith("image/");
+          const upload = isImage
+            ? await channel.sendImage(evidenceFile, evidenceFile.name, evidenceFile.type)
+            : await channel.sendFile(evidenceFile, evidenceFile.name, evidenceFile.type);
+          attachments.push({
+            asset_url: upload.file,
+            image_url: isImage ? upload.file : undefined,
+            mime_type: evidenceFile.type,
+            title: evidenceFile.name,
+            type: isImage ? "image" : "file",
+          });
+        }
 
         await channel.sendMessage({
-          attachments: [
-            {
-              asset_url: upload.file,
-              image_url: isImage ? upload.file : undefined,
-              mime_type: file.type,
-              title: file.name,
-              type: isImage ? "image" : "file",
-            },
-          ],
+          attachments,
           text: note.trim()
             ? `Progress evidence: ${note.trim()}`
             : "Progress evidence submitted for AI review.",
@@ -94,7 +151,7 @@ export function StudentProgressSubmission() {
       }
 
       if (responseBody.approved) {
-        setFile(null);
+        setFiles([]);
         setNote("");
         if (fileInputRef.current) fileInputRef.current.value = "";
         if (cameraInputRef.current) cameraInputRef.current.value = "";
@@ -107,6 +164,44 @@ export function StudentProgressSubmission() {
       );
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const chooseFiles = async (selectedFiles: FileList | null, append = false) => {
+    setErrorMessage("");
+    setResult(null);
+    if (!selectedFiles?.length) {
+      if (!append) setFiles([]);
+      return;
+    }
+
+    const selected = Array.from(selectedFiles);
+    const combinedCount = (append ? files.length : 0) + selected.length;
+    if (combinedCount > MAX_PHOTOS) {
+      if (!append) setFiles([]);
+      setErrorMessage(`Choose up to ${MAX_PHOTOS} photos at a time`);
+      return;
+    }
+    const allSelectedFiles = append ? [...files, ...selected] : selected;
+    if (allSelectedFiles.length > 1 && allSelectedFiles.some((file) => !file.type.startsWith("image/"))) {
+      setFiles([]);
+      setErrorMessage("Upload either one document or up to six worksheet photos");
+      return;
+    }
+
+    try {
+      const newlyOptimized = await Promise.all(selected.map(optimizePhoto));
+      const optimized = append ? [...files, ...newlyOptimized] : newlyOptimized;
+      const totalBytes = optimized.reduce((sum, file) => sum + file.size, 0);
+      if (totalBytes > MAX_UPLOAD_BYTES) {
+        setFiles([]);
+        setErrorMessage("These photos are still too large together. Choose fewer photos or take screenshots of them.");
+        return;
+      }
+      setFiles(optimized);
+    } catch (error) {
+      setFiles([]);
+      setErrorMessage(error instanceof Error ? error.message : "The selected photos could not be prepared");
     }
   };
 
@@ -135,9 +230,8 @@ export function StudentProgressSubmission() {
                 capture="environment"
                 className="sr-only"
                 onChange={(event) => {
-                  setFile(event.target.files?.[0] ?? null);
-                  setErrorMessage("");
-                  setResult(null);
+                  const input = event.currentTarget;
+                  void chooseFiles(input.files, true).finally(() => { input.value = ""; });
                 }}
                 ref={cameraInputRef}
                 type="file"
@@ -149,19 +243,16 @@ export function StudentProgressSubmission() {
               <input
                 accept=".gif,.jpeg,.jpg,.pdf,.png,.txt,.webp,.doc,.docx"
                 className="sr-only"
-                onChange={(event) => {
-                  setFile(event.target.files?.[0] ?? null);
-                  setErrorMessage("");
-                  setResult(null);
-                }}
+                multiple
+                onChange={(event) => void chooseFiles(event.target.files)}
                 ref={fileInputRef}
                 type="file"
               />
             </label>
           </div>
-          {file && (
-            <p className="truncate rounded-xl bg-[#f4f0e8] px-3 py-2 text-xs font-bold text-zinc-700">
-              Selected: {file.name}
+          {files.length > 0 && (
+            <p className="rounded-xl bg-[#f4f0e8] px-3 py-2 text-xs font-bold text-zinc-700">
+              Selected: {files.length === 1 ? files[0].name : `${files.length} worksheet photos`}
             </p>
           )}
           <input
@@ -175,7 +266,7 @@ export function StudentProgressSubmission() {
         </div>
         <button
           className="flex items-center justify-center gap-2 self-start rounded-full border-2 border-black bg-[#fffc00] px-5 py-3 text-sm font-black text-black shadow-[3px_3px_0_#111] transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-50"
-          disabled={isSubmitting || !file}
+          disabled={isSubmitting || !files.length}
           type="submit"
         >
           {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
