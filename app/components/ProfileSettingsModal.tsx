@@ -207,7 +207,11 @@ export default function ProfileSettingsModal() {
         </DialogDescription>
       </DialogHeader>
 
-      <section className="rounded-2xl border-2 border-black bg-[#f4f0e8] p-4">
+      <section
+        className={`rounded-2xl border-2 border-black bg-[#f4f0e8] p-4 ${
+          role === "parent" ? "order-3" : role === "student" ? "order-2" : "order-1"
+        }`}
+      >
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="font-black capitalize">{user?.displayName}</p>
@@ -226,7 +230,11 @@ export default function ProfileSettingsModal() {
         <p className="mt-2 text-xs text-zinc-500">Usernames use letters, numbers, dots, underscores, or hyphens.</p>
       </section>
 
-      <section className="rounded-2xl border-2 border-black bg-white p-4">
+      <section
+        className={`rounded-2xl border-2 border-black bg-white p-4 ${
+          role === "parent" ? "order-4" : role === "student" ? "order-3" : "order-2"
+        }`}
+      >
         <div className="flex items-center gap-2">
           <Sparkles className="size-5" />
           <div>
@@ -268,7 +276,7 @@ export default function ProfileSettingsModal() {
       </section>
 
       {role === "parent" && (
-        <section className="rounded-2xl border-2 border-black bg-[#fffbd5] p-4">
+        <section className="order-2 rounded-2xl border-2 border-black bg-[#fffbd5] p-4">
           <div className="flex items-start gap-3">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-full border-2 border-black bg-white"><Mail className="size-5" /></span>
             <div>
@@ -338,7 +346,7 @@ export default function ProfileSettingsModal() {
       )}
 
       {role === "parent" && (
-        <section className="rounded-2xl border-2 border-black bg-[#c7b7ff] p-4">
+        <section className="order-1 rounded-2xl border-2 border-black bg-[#c7b7ff] p-4">
           <div className="flex items-center gap-2"><UserRoundPlus className="size-5" /><h3 className="font-black">Connect to a student</h3></div>
           <p className="mt-1 text-xs leading-5 text-zinc-700">Enter your child&apos;s exact username. They must approve the request before any assignment progress becomes visible.</p>
           <form className="mt-3 flex flex-col gap-2 sm:flex-row" onSubmit={requestStudent}>
@@ -360,7 +368,7 @@ export default function ProfileSettingsModal() {
       )}
 
       {role === "student" && (
-        <section className="rounded-2xl border-2 border-black bg-[#fffbd5] p-4">
+        <section className="order-1 rounded-2xl border-2 border-black bg-[#fffbd5] p-4">
           <div className="flex items-center gap-2"><ShieldCheck className="size-5" /><h3 className="font-black">Parent supervision</h3></div>
           <p className="mt-1 text-xs leading-5 text-zinc-600">Only approve a parent or guardian you recognize. Approval gives them read-only access to your assignment progress.</p>
           <div className="mt-4 grid gap-2">
@@ -382,9 +390,9 @@ export default function ProfileSettingsModal() {
         </section>
       )}
 
-      {isLoading && <p className="flex items-center gap-2 text-sm text-zinc-500"><Loader2 className="size-4 animate-spin" /> Loading connections…</p>}
-      {message && <p className="rounded-xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-800" role="status">{message}</p>}
-      {errorMessage && <p className="rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{errorMessage}</p>}
+      {isLoading && <p className="order-5 flex items-center gap-2 text-sm text-zinc-500"><Loader2 className="size-4 animate-spin" /> Loading connections…</p>}
+      {message && <p className="order-5 rounded-xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-800" role="status">{message}</p>}
+      {errorMessage && <p className="order-5 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{errorMessage}</p>}
     </DialogContent>
   );
 }
