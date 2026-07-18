@@ -162,8 +162,30 @@ export const changeDisplayName = async (displayNameValue: string) => {
         throw new Error("Your profile could not be verified");
       }
       const update = { displayName, updatedAt: serverTimestamp() };
-      transaction.set(profileRef, update, { merge: true });
-      transaction.set(usernameRef, update, { merge: true });
+      const stableProfileData = stableProfile.data();
+      const usernameProfileData = usernameProfile.data();
+      transaction.set(
+        profileRef,
+        {
+          ...update,
+          ...(stableProfileData?.role === "student" &&
+          !stableProfileData.studentMode
+            ? { studentMode: "school" }
+            : {}),
+        },
+        { merge: true },
+      );
+      transaction.set(
+        usernameRef,
+        {
+          ...update,
+          ...(usernameProfileData?.role === "student" &&
+          !usernameProfileData.studentMode
+            ? { studentMode: "school" }
+            : {}),
+        },
+        { merge: true },
+      );
     });
 
     return { success: true, message: "Display name updated successfully" };
