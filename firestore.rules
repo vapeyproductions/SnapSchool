@@ -153,7 +153,7 @@ service cloud.firestore {
         && request.auth.uid in request.resource.data.administratorIds;
 
       allow delete: if signedIn()
-        && request.auth.uid in resource.data.administratorIds;
+        && resource.data.createdBy == request.auth.uid;
     }
   }
 }

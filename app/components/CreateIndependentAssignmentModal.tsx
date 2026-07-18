@@ -1,16 +1,22 @@
 "use client";
 
-import { CalendarDays, FileText, Loader2, Sparkles, UserRound } from "lucide-react";
+import { CalendarDays, FileText, Loader2, Sparkles, Trash2, UserRound } from "lucide-react";
 import { type Dispatch, useContext, useEffect, useState } from "react";
 
 import { getAssignablePersonalStudents } from "@/actions/profile";
-import { createPersonalAssignment } from "@/actions/stream";
+import { createPersonalAssignment, deletePersonalClass } from "@/actions/stream";
 import { DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { AssignmentAnalysis } from "@/lib/assignment-analysis";
 
 import AuthContext from "./AuthContext";
 
-type AssignableStudent = { classNames: string[]; displayName: string; uid: string; username: string };
+type AssignableStudent = {
+  classNames: string[];
+  displayName: string;
+  ownedClassNames: string[];
+  uid: string;
+  username: string;
+};
 
 export default function CreateIndependentAssignmentModal({
   setOpen,
@@ -31,6 +37,7 @@ export default function CreateIndependentAssignmentModal({
   const [isLoading, setIsLoading] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [deletingClassName, setDeletingClassName] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
@@ -124,6 +131,41 @@ export default function CreateIndependentAssignmentModal({
 
   const selectedStudent = students.find((student) => student.uid === targetStudentUid);
 
+  const removePersonalClass = async (personalClassName: string) => {
+    if (!user || !selectedStudent) return;
+    const confirmed = window.confirm(
+      `Delete “${personalClassName}”? This permanently removes only the assignments you created in this class for ${selectedStudent.displayName}. School assignments and work created by other people will stay.`,
+    );
+    if (!confirmed) return;
+
+    setDeletingClassName(personalClassName);
+    setErrorMessage("");
+    try {
+      const firebaseIdToken = await user.getIdToken();
+      const result = await deletePersonalClass({
+        className: personalClassName,
+        firebaseIdToken,
+        targetStudentUid: selectedStudent.uid,
+      });
+      if (!result.success) {
+        throw new Error(result.error ?? "Unable to delete the class");
+      }
+      const refreshed = await getAssignablePersonalStudents(firebaseIdToken);
+      if (refreshed.success) setStudents(refreshed.students);
+      if (className.trim().toLocaleLowerCase() === personalClassName.toLocaleLowerCase()) {
+        setClassName("");
+        setAnalysis(null);
+      }
+      window.dispatchEvent(new Event("snapschool:class-deleted"));
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Unable to delete the class",
+      );
+    } finally {
+      setDeletingClassName("");
+    }
+  };
+
   return (
     <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl border-2 border-black sm:max-w-2xl">
       <DialogHeader>
@@ -153,6 +195,33 @@ export default function CreateIndependentAssignmentModal({
               <p className="rounded-xl border-2 border-black bg-[#fffbd5] px-3 py-2.5 font-black">{selectedStudent?.displayName}</p>
             )}
           </label>
+
+          {selectedStudent && selectedStudent.ownedClassNames.length > 0 && (
+            <details className="rounded-xl border border-zinc-300 bg-zinc-50 p-3">
+              <summary className="cursor-pointer text-sm font-black">
+                Manage classes you added
+              </summary>
+              <p className="mt-2 text-xs leading-5 text-zinc-500">
+                Kept here so class cleanup does not clutter the main dashboard. Deleting a class removes only assignments created by your account.
+              </p>
+              <div className="mt-3 grid gap-2">
+                {selectedStudent.ownedClassNames.map((personalClassName) => (
+                  <div className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white p-3" key={personalClassName}>
+                    <span className="min-w-0 truncate text-sm font-bold">{personalClassName}</span>
+                    <button
+                      className="flex shrink-0 items-center gap-1.5 rounded-full border border-red-700 px-3 py-1.5 text-xs font-black text-red-700 hover:bg-red-50 disabled:opacity-50"
+                      disabled={Boolean(deletingClassName)}
+                      onClick={() => void removePersonalClass(personalClassName)}
+                      type="button"
+                    >
+                      {deletingClassName === personalClassName ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+                      {deletingClassName === personalClassName ? "Deleting…" : "Delete class"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
 
           <label className="block space-y-2 text-sm font-medium">
             Class or subject

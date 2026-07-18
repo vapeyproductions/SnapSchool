@@ -275,13 +275,18 @@ function AuthenticatedStreakPage({
       if (!cid) return;
       setAssignmentChannels((current) => current.filter((channel) => channel.cid !== cid));
     };
+    const personalClassDeleted = () => {
+      void loadAssignments();
+    };
     window.addEventListener("snapschool:assignment-deleted", personalDeleted);
+    window.addEventListener("snapschool:class-deleted", personalClassDeleted);
     return () => {
       cancelled = true;
       updateSubscription.unsubscribe();
       addedSubscription.unsubscribe();
       deletedSubscription.unsubscribe();
       window.removeEventListener("snapschool:assignment-deleted", personalDeleted);
+      window.removeEventListener("snapschool:class-deleted", personalClassDeleted);
     };
   }, [client, refreshKey, sort, user.uid]);
 

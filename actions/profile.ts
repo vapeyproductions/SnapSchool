@@ -406,16 +406,24 @@ export const saveParentEmailPreferences = async (data: {
 type PersonalAssignmentStudent = {
   classNames: string[];
   displayName: string;
+  ownedClassNames: string[];
   uid: string;
   username: string;
 };
 
 const addKnownClasses = async (
   students: Array<{ displayName: string; uid: string; username: string }>,
+  creatorUid: string,
 ): Promise<PersonalAssignmentStudent[]> => {
   const apiKey = process.env.NEXT_PUBLIC_STREAM_API_KEY;
   const secret = process.env.STREAM_SECRET_KEY;
-  if (!apiKey || !secret) return students.map((student) => ({ ...student, classNames: [] }));
+  if (!apiKey || !secret) {
+    return students.map((student) => ({
+      ...student,
+      classNames: [],
+      ownedClassNames: [],
+    }));
+  }
 
   const streamClient = StreamChat.getInstance(apiKey, secret);
   return Promise.all(students.map(async (student) => {
@@ -432,13 +440,23 @@ const addKnownClasses = async (
           { limit: 30, state: false, watch: false },
         ),
       ]);
-      const classNames = [...new Set([...individual, ...group]
+      const channels = [...individual, ...group];
+      const classNames = [...new Set(channels
         .map((channel) => channel.data?.class_name?.trim())
         .filter((name): name is string => Boolean(name)))]
         .sort((first, second) => first.localeCompare(second));
-      return { ...student, classNames };
+      const ownedClassNames = [...new Set(channels
+        .filter((channel) =>
+          channel.data?.assignment_source === "personal" &&
+          (channel.data?.created_by_id === creatorUid ||
+            channel.data?.assignment_creator_id === creatorUid),
+        )
+        .map((channel) => channel.data?.class_name?.trim())
+        .filter((name): name is string => Boolean(name)))]
+        .sort((first, second) => first.localeCompare(second));
+      return { ...student, classNames, ownedClassNames };
     } catch {
-      return { ...student, classNames: [] };
+      return { ...student, classNames: [], ownedClassNames: [] };
     }
   }));
 };
@@ -449,7 +467,10 @@ export const getAssignablePersonalStudents = async (idToken: string) => {
     if (caller.role === "student") {
       return {
         error: null,
-        students: await addKnownClasses([{ displayName: caller.displayName, uid: caller.uid, username: caller.username }]),
+        students: await addKnownClasses(
+          [{ displayName: caller.displayName, uid: caller.uid, username: caller.username }],
+          caller.uid,
+        ),
         success: true as const,
       };
     }
@@ -465,7 +486,11 @@ export const getAssignablePersonalStudents = async (idToken: string) => {
     ))
       .filter((student) => student.role === "student")
       .map((student) => ({ displayName: student.displayName, uid: student.uid, username: student.username }));
-    return { error: null, students: await addKnownClasses(students), success: true as const };
+    return {
+      error: null,
+      students: await addKnownClasses(students, caller.uid),
+      success: true as const,
+    };
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : "Unable to load students",

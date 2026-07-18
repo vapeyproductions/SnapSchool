@@ -966,6 +966,66 @@ export const updateSchoolClass = async (data: {
   }
 };
 
+export const deleteSchoolClass = async (data: {
+  classId: string;
+  firebaseIdToken: string;
+}) => {
+  try {
+    const administrator = await authenticateCaller(data.firebaseIdToken);
+    if (administrator.role !== "administrator") {
+      throw new Error("Only administrators can delete classes");
+    }
+
+    const schoolClass = await getSchoolClass(
+      data.firebaseIdToken,
+      data.classId,
+    );
+    if (schoolClass.createdBy !== administrator.uid) {
+      throw new Error("Only the person who created this class can delete it");
+    }
+
+    const classChannels: Awaited<ReturnType<typeof serverClient.queryChannels>> = [];
+    const pageSize = 30;
+    let offset = 0;
+    while (true) {
+      const channels = await serverClient.queryChannels(
+        { class_id: schoolClass.id },
+        {},
+        { limit: pageSize, offset, state: false, watch: false },
+      );
+      classChannels.push(...channels);
+      if (channels.length < pageSize) break;
+      offset += pageSize;
+    }
+
+    await Promise.all(classChannels.map((channel) => channel.delete()));
+
+    const { firebaseProjectId } = requireServerConfig();
+    const response = await fetch(
+      `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}` +
+        `/databases/(default)/documents/classes/${schoolClass.id}`,
+      {
+        method: "DELETE",
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${data.firebaseIdToken}` },
+      },
+    );
+    if (!response.ok) throw new Error("Unable to delete the class roster");
+
+    return {
+      deletedAssignmentCount: classChannels.length,
+      error: null,
+      success: true as const,
+    };
+  } catch (error) {
+    return {
+      deletedAssignmentCount: 0,
+      error: error instanceof Error ? error.message : "Unable to delete the class",
+      success: false as const,
+    };
+  }
+};
+
 export const createClassAssignment = async (data: {
   classIds: string[];
   firebaseIdToken: string;
@@ -1249,6 +1309,87 @@ export const createPersonalAssignment = async (data: {
     return {
       error: error instanceof Error ? error.message : "Unable to create the personal assignment",
       success: false,
+    };
+  }
+};
+
+export const deletePersonalClass = async (data: {
+  className: string;
+  firebaseIdToken: string;
+  targetStudentUid: string;
+}) => {
+  try {
+    const creator = await authenticateCaller(data.firebaseIdToken);
+    if (creator.role === "administrator") {
+      throw new Error("Administrators manage classes from the class editor");
+    }
+
+    let approvedStudentUsername: string | undefined;
+    if (creator.role === "parent") {
+      const connection = await getApprovedParentConnection(
+        data.firebaseIdToken,
+        creator.uid,
+        data.targetStudentUid,
+      );
+      if (!connection) {
+        throw new Error("The student must approve parent access first");
+      }
+      approvedStudentUsername = connection.fields?.studentUsername?.stringValue;
+    }
+    const student = creator.role === "student"
+      ? creator
+      : await getProfileByUid(
+          data.firebaseIdToken,
+          data.targetStudentUid,
+          approvedStudentUsername,
+        );
+    if (student.role !== "student" || (creator.role === "student" && student.uid !== creator.uid)) {
+      throw new Error("You cannot manage classes for this student");
+    }
+
+    const className = data.className.trim();
+    if (className.length < 2 || className.length > 60) {
+      throw new Error("Select a valid personal class");
+    }
+    const channels: Awaited<ReturnType<typeof serverClient.queryChannels>> = [];
+    const pageSize = 30;
+    let offset = 0;
+    while (true) {
+      const page = await serverClient.queryChannels(
+        { members: { $in: [student.uid] }, type: "messaging" },
+        {},
+        { limit: pageSize, offset, state: false, watch: false },
+      );
+      channels.push(...page);
+      if (page.length < pageSize) break;
+      offset += pageSize;
+    }
+    const ownedAssignments = channels.filter((channel) => {
+      const channelCreator =
+        channel.data?.created_by_id ?? channel.data?.assignment_creator_id;
+      return (
+        channel.data?.assignment_source === "personal" &&
+        channelCreator === creator.uid &&
+        channel.data?.class_name?.trim().toLocaleLowerCase() ===
+          className.toLocaleLowerCase()
+      );
+    });
+    if (ownedAssignments.length === 0) {
+      throw new Error("No assignments created by you were found in this class");
+    }
+
+    await Promise.all(ownedAssignments.map((channel) => channel.delete()));
+    return {
+      deletedAssignmentCount: ownedAssignments.length,
+      error: null,
+      success: true as const,
+    };
+  } catch (error) {
+    return {
+      deletedAssignmentCount: 0,
+      error:
+        error instanceof Error ? error.message : "Unable to delete the personal class",
+      success: false as const,
     };
   }
 };

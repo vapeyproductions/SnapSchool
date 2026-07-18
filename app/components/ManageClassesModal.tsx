@@ -6,6 +6,7 @@ import {
   Pencil,
   Save,
   School,
+  Trash2,
   UsersRound,
   X,
 } from "lucide-react";
@@ -19,6 +20,7 @@ import {
 
 import {
   createSchoolClass,
+  deleteSchoolClass,
   getAdministratorClasses,
   type SchoolClassSummary,
   updateSchoolClass,
@@ -41,6 +43,7 @@ export default function ManageClassesModal() {
   const [editingClassName, setEditingClassName] = useState("");
   const [editingRoster, setEditingRoster] = useState("");
   const [isSavingRoster, setIsSavingRoster] = useState(false);
+  const [deletingClassId, setDeletingClassId] = useState("");
   const [isLoading, startLoadingTransition] = useTransition();
 
   useEffect(() => {
@@ -205,6 +208,45 @@ export default function ManageClassesModal() {
     }
   };
 
+  const handleDeleteClass = async (schoolClass: SchoolClassSummary) => {
+    if (!user || role !== "administrator") return;
+    const confirmed = window.confirm(
+      `Delete “${schoolClass.name}”? This permanently removes the class roster, its assignments, chats, and student progress. This cannot be undone.`,
+    );
+    if (!confirmed) return;
+
+    setDeletingClassId(schoolClass.id);
+    setErrorMessage("");
+    setSuccessMessage("");
+    try {
+      const result = await deleteSchoolClass({
+        classId: schoolClass.id,
+        firebaseIdToken: await user.getIdToken(),
+      });
+      if (!result.success) {
+        throw new Error(result.error ?? "Unable to delete the class");
+      }
+      setClasses((current) =>
+        current.filter((item) => item.id !== schoolClass.id),
+      );
+      cancelEditing();
+      setSuccessMessage(
+        `${schoolClass.name} and ${result.deletedAssignmentCount} assignment${result.deletedAssignmentCount === 1 ? "" : "s"} were deleted.`,
+      );
+      window.dispatchEvent(
+        new CustomEvent("snapschool:class-deleted", {
+          detail: { classId: schoolClass.id },
+        }),
+      );
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Unable to delete the class",
+      );
+    } finally {
+      setDeletingClassId("");
+    }
+  };
+
   return (
     <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl sm:max-w-2xl">
       <DialogHeader>
@@ -358,7 +400,25 @@ export default function ManageClassesModal() {
                         not delete their historical work.
                       </p>
                     </div>
-                    <div className="flex justify-end gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      {schoolClass.createdBy === user?.uid ? (
+                        <button
+                          className="flex items-center gap-1.5 rounded-lg border border-red-700 bg-white px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                          disabled={isSavingRoster || deletingClassId === schoolClass.id}
+                          onClick={() => void handleDeleteClass(schoolClass)}
+                          type="button"
+                        >
+                          {deletingClassId === schoolClass.id ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="size-4" />
+                          )}
+                          {deletingClassId === schoolClass.id ? "Deleting…" : "Delete class"}
+                        </button>
+                      ) : (
+                        <p className="text-xs text-slate-500">Only the class creator can delete it.</p>
+                      )}
+                      <div className="flex gap-2">
                       <button
                         className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                         disabled={isSavingRoster}
@@ -384,6 +444,7 @@ export default function ManageClassesModal() {
                         )}
                         {isSavingRoster ? "Saving..." : "Save class changes"}
                       </button>
+                      </div>
                     </div>
                   </div>
                 ) : (

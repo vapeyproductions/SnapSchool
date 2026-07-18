@@ -597,9 +597,22 @@ export default function AdministratorClassDashboard({
       }
     };
 
+    const handleClassDeleted = (event: Event) => {
+      const classId = (event as CustomEvent<{ classId?: string }>).detail?.classId;
+      if (!classId) return;
+      setClasses((current) => current.filter((schoolClass) => schoolClass.id !== classId));
+      setChannels((current) => current.filter((channel) => channel.data?.class_id !== classId));
+      setSelectedClassId((current) => (current === classId ? "" : current));
+      setCalendarClassId((current) => (current === classId ? "all" : current));
+      setSelectedAssignmentKey("");
+    };
+
     window.addEventListener("snapschool:class-updated", handleClassUpdated);
-    return () =>
+    window.addEventListener("snapschool:class-deleted", handleClassDeleted);
+    return () => {
       window.removeEventListener("snapschool:class-updated", handleClassUpdated);
+      window.removeEventListener("snapschool:class-deleted", handleClassDeleted);
+    };
   }, [client, user.uid]);
 
   useEffect(() => {
