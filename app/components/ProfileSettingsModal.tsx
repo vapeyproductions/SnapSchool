@@ -244,7 +244,7 @@ export default function ProfileSettingsModal() {
             <span className="mb-1 block text-xs font-black uppercase tracking-wider">Display name</span>
             <input className="w-full rounded-xl border-2 border-black bg-white px-3 py-2.5" defaultValue={displayName || username} maxLength={60} name="displayName" required />
           </label>
-          <button className="self-end rounded-xl border-2 border-black bg-white px-4 py-2.5 font-black disabled:opacity-60" disabled={busyId === "display-name"} type="submit">
+          <button className="w-full self-end rounded-xl border-2 border-black bg-[#fffc00] px-4 py-2.5 font-black disabled:opacity-60 sm:w-52" disabled={busyId === "display-name"} type="submit">
             {busyId === "display-name" ? "Updating…" : "Change display name"}
           </button>
         </form>
@@ -254,7 +254,7 @@ export default function ProfileSettingsModal() {
             <span className="mb-1 block text-xs font-black uppercase tracking-wider">Unique username</span>
             <input className="w-full rounded-xl border-2 border-black bg-white px-3 py-2.5" defaultValue={username} minLength={3} maxLength={30} name="username" required />
           </label>
-          <button className="rounded-xl border-2 border-black bg-[#fffc00] px-4 py-2.5 font-black disabled:opacity-60" disabled={busyId === "username"} type="submit">
+          <button className="w-full self-end rounded-xl border-2 border-black bg-[#fffc00] px-4 py-2.5 font-black disabled:opacity-60 sm:w-52" disabled={busyId === "username"} type="submit">
             {busyId === "username" ? "Updating…" : "Change username"}
           </button>
         </form>

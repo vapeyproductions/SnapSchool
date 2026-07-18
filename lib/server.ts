@@ -144,10 +144,12 @@ export const changeDisplayName = async (displayNameValue: string) => {
 
     const profileRef = doc(db, "profiles", user.uid);
     const profile = await getDoc(profileRef);
-    const username = profile.data()?.username?.trim().toLowerCase();
-    if (!profile.exists() || !username || profile.data()?.uid !== user.uid) {
-      throw new Error("Your profile could not be verified");
-    }
+    const profileData = profile.data();
+    const username =
+      profile.exists() && profileData?.uid === user.uid
+        ? profileData.username?.trim().toLowerCase()
+        : user.displayName?.trim().toLowerCase();
+    if (!username) throw new Error("Your profile could not be verified");
 
     const usernameRef = doc(db, "users", username);
     await runTransaction(db, async (transaction) => {
@@ -155,37 +157,42 @@ export const changeDisplayName = async (displayNameValue: string) => {
         transaction.get(profileRef),
         transaction.get(usernameRef),
       ]);
+      const stableProfileData = stableProfile.data();
+      const usernameProfileData = usernameProfile.data();
       if (
-        stableProfile.data()?.uid !== user.uid ||
-        usernameProfile.data()?.uid !== user.uid
+        (stableProfile.exists() && stableProfileData?.uid !== user.uid) ||
+        (usernameProfile.exists() && usernameProfileData?.uid !== user.uid) ||
+        (!stableProfile.exists() && !usernameProfile.exists())
       ) {
         throw new Error("Your profile could not be verified");
       }
       const update = { displayName, updatedAt: serverTimestamp() };
-      const stableProfileData = stableProfile.data();
-      const usernameProfileData = usernameProfile.data();
       const stableProfileNeedsStudentMode =
         stableProfileData?.role === "student" &&
         !Object.prototype.hasOwnProperty.call(stableProfileData, "studentMode");
       const usernameProfileNeedsStudentMode =
         usernameProfileData?.role === "student" &&
         !Object.prototype.hasOwnProperty.call(usernameProfileData, "studentMode");
-      transaction.set(
-        profileRef,
-        {
-          ...update,
-          ...(stableProfileNeedsStudentMode ? { studentMode: "school" } : {}),
-        },
-        { merge: true },
-      );
-      transaction.set(
-        usernameRef,
-        {
-          ...update,
-          ...(usernameProfileNeedsStudentMode ? { studentMode: "school" } : {}),
-        },
-        { merge: true },
-      );
+      if (stableProfile.exists()) {
+        transaction.set(
+          profileRef,
+          {
+            ...update,
+            ...(stableProfileNeedsStudentMode ? { studentMode: "school" } : {}),
+          },
+          { merge: true },
+        );
+      }
+      if (usernameProfile.exists()) {
+        transaction.set(
+          usernameRef,
+          {
+            ...update,
+            ...(usernameProfileNeedsStudentMode ? { studentMode: "school" } : {}),
+          },
+          { merge: true },
+        );
+      }
     });
 
     return { success: true, message: "Display name updated successfully" };
