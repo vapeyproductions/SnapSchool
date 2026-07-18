@@ -7,6 +7,8 @@ import { parseAssignmentAnalysis } from "@/lib/assignment-analysis";
 export const runtime = "nodejs";
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_FILE_COUNT = 10;
+const MAX_TOTAL_FILE_BYTES = 30 * 1024 * 1024;
 const IMAGE_TYPES = new Set(["image/gif", "image/jpeg", "image/png", "image/webp"]);
 const DOCUMENT_TYPES = new Set([
   "application/msword",
@@ -228,17 +230,25 @@ export async function POST(request: Request) {
       ? Number.parseInt(groupWorkerCountRaw, 10)
       : 1;
     const groupCount = groupCountRaw ? Number.parseInt(groupCountRaw, 10) : 1;
-    const fileValue = formData.get("file");
-    const file = fileValue instanceof File && fileValue.size > 0 ? fileValue : null;
+    const files = [
+      ...formData.getAll("files"),
+      ...formData.getAll("file"),
+    ].filter(
+      (value): value is File => value instanceof File && value.size > 0,
+    );
 
-    if (!description && !file) return errorResponse("Add a description or upload an assignment file", 400);
+    if (!description && files.length === 0) return errorResponse("Add a description or upload assignment files", 400);
     if (description.length > 12000) return errorResponse("The description must be 12,000 characters or less", 400);
     if (clarification.length > 4000) return errorResponse("The clarification must be 4,000 characters or less", 400);
     if (teacherDueDate && !/^\d{4}-\d{2}-\d{2}$/.test(teacherDueDate)) return errorResponse("Enter a valid due date", 400);
     if (!Number.isInteger(groupWorkerCount) || groupWorkerCount < 1 || groupWorkerCount > 100) return errorResponse("Enter a valid group size", 400);
     if (!Number.isInteger(groupCount) || groupCount < 1 || groupCount > 30) return errorResponse("Enter a valid number of groups", 400);
-    if (file && file.size > MAX_FILE_BYTES) return errorResponse("The uploaded file must be 10 MB or smaller", 400);
-    if (file && !IMAGE_TYPES.has(file.type) && !DOCUMENT_TYPES.has(file.type)) {
+    if (files.length > MAX_FILE_COUNT) return errorResponse(`Upload no more than ${MAX_FILE_COUNT} files at once`, 400);
+    if (files.some((file) => file.size > MAX_FILE_BYTES)) return errorResponse("Each uploaded file must be 10 MB or smaller", 400);
+    if (files.reduce((total, file) => total + file.size, 0) > MAX_TOTAL_FILE_BYTES) {
+      return errorResponse("The combined uploads must be 30 MB or smaller", 400);
+    }
+    if (files.some((file) => !IMAGE_TYPES.has(file.type) && !DOCUMENT_TYPES.has(file.type))) {
       return errorResponse("Upload a PNG, JPEG, WebP, GIF, PDF, Word, or text file", 400);
     }
 
@@ -248,6 +258,7 @@ export async function POST(request: Request) {
         `Teacher-entered due-date override: ${teacherDueDate || "none"}. Only this explicitly entered override supersedes dates found in the source.\n` +
         `This plan will be shared once across ${groupCount} group${groupCount === 1 ? "" : "s"}. The smallest group has ${groupWorkerCount} student workers, so make every step achievable by that group size.\n` +
         `Teacher description: ${description || "none"}.\n\n` +
+        `Uploaded source files: ${files.length}. Treat all uploaded files as parts of the same assignment, read them in the supplied order, and reconcile instructions or dates across the complete set.\n\n` +
         `Teacher clarification after reviewing an earlier analysis: ${clarification || "none"}. Treat this clarification as authoritative when it resolves ambiguity in the source.\n\n` +
         "Extract a concise title and the actual deliverables. Estimate realistic student work time. " +
         "Classify the work as essay, exam, homework, other, project, quiz, reading, or test. " +
@@ -269,7 +280,7 @@ export async function POST(request: Request) {
       type: "input_text",
     }];
 
-    if (file) {
+    for (const file of files) {
       const dataUrl = `data:${file.type};base64,${Buffer.from(await file.arrayBuffer()).toString("base64")}`;
       content.push(IMAGE_TYPES.has(file.type)
         ? { detail: "high", image_url: dataUrl, type: "input_image" }

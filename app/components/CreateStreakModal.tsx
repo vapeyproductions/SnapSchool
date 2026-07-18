@@ -41,7 +41,8 @@ export default function CreateStreakModal({
   const [clarification, setClarification] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [dueDateManuallySet, setDueDateManuallySet] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [fileInputKey, setFileInputKey] = useState(0);
   const [analysis, setAnalysis] = useState<AssignmentAnalysis | null>(null);
   const [title, setTitle] = useState("");
 
@@ -92,7 +93,7 @@ export default function CreateStreakModal({
       setErrorMessage("Only administrators can analyze assignments");
       return;
     }
-    if (!description.trim() && !file) {
+    if (!description.trim() && files.length === 0) {
       setErrorMessage("Add a brief description or upload an assignment first");
       return;
     }
@@ -103,7 +104,7 @@ export default function CreateStreakModal({
       formData.set("description", description.trim());
       formData.set("clarification", clarification.trim());
       if (dueDateManuallySet && dueDate) formData.set("dueDateOverride", dueDate);
-      if (file) formData.set("file", file);
+      files.forEach((file) => formData.append("files", file));
 
       const response = await fetch("/api/assignments/analyze", {
         body: formData,
@@ -176,6 +177,16 @@ export default function CreateStreakModal({
       });
       if (result.success) {
         setAssignmentRequestId(crypto.randomUUID());
+        setClassIds([]);
+        setDescription("");
+        setClarification("");
+        setDueDate("");
+        setDueDateManuallySet(false);
+        setFiles([]);
+        setFileInputKey((current) => current + 1);
+        setAnalysis(null);
+        setTitle("");
+        setErrorMessage("");
         window.dispatchEvent(new Event("snapschool:assignment-created"));
         setOpen(false);
         return;
@@ -248,19 +259,19 @@ export default function CreateStreakModal({
             <textarea className="min-h-28 w-full resize-y rounded-xl border border-slate-300 bg-white px-3 py-2.5 outline-none focus:border-indigo-500 focus:ring-3 focus:ring-indigo-100" maxLength={12000} onChange={(event) => setDescription(event.target.value)} placeholder="For example: Read chapters 3-4 and write a two-page response comparing the main characters." value={description} />
           </label>
           <label className="block space-y-2 text-sm font-medium">
-            Screenshot or document (optional)
+            Screenshots or documents (optional)
             <span className="flex items-center gap-3 rounded-xl border border-dashed border-indigo-300 bg-white px-3 py-3 text-sm text-slate-600">
               <FileText className="size-5 text-indigo-600" />
-              <input accept=".gif,.jpeg,.jpg,.pdf,.png,.txt,.webp,.doc,.docx" className="min-w-0 flex-1 text-xs" onChange={(event) => setFile(event.target.files?.[0] ?? null)} type="file" />
+              <input accept=".gif,.jpeg,.jpg,.pdf,.png,.txt,.webp,.doc,.docx" className="min-w-0 flex-1 text-xs" key={fileInputKey} multiple onChange={(event) => { setFiles(Array.from(event.target.files ?? [])); setAnalysis(null); }} type="file" />
             </span>
-            <span className="block text-xs font-normal text-slate-500">Maximum 10 MB. Avoid uploading student names, grades, or other private information.</span>
+            <span className="block text-xs font-normal text-slate-500">Up to 10 files, 10 MB each and 30 MB combined. Upload pages in reading order. Avoid student names, grades, or other private information.</span>
           </label>
           <label className="block space-y-2 text-sm font-medium">
             Due date (optional before analysis)
             <span className="relative block"><CalendarDays className="absolute left-3 top-3 size-4 text-slate-400" /><input className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-3" min={new Date().toISOString().slice(0, 10)} onChange={(event) => { setDueDate(event.target.value); setDueDateManuallySet(Boolean(event.target.value)); }} type="date" value={dueDate} /></span>
             <span className="block text-xs font-normal text-slate-500">Your date overrides one detected in the uploaded assignment.</span>
           </label>
-          <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 font-medium text-white hover:bg-indigo-700 disabled:opacity-60" disabled={isAnalyzing || (!description.trim() && !file)} onClick={() => void analyzeAssignment()} type="button">
+          <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 font-medium text-white hover:bg-indigo-700 disabled:opacity-60" disabled={isAnalyzing || (!description.trim() && files.length === 0)} onClick={() => void analyzeAssignment()} type="button">
             {isAnalyzing ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
             {isAnalyzing ? "Analyzing assignment..." : analysis ? "Analyze again" : "Analyze with AI"}
           </button>

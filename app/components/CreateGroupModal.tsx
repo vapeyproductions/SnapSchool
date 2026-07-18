@@ -33,7 +33,8 @@ export default function CreateGroupModal({
   const [clarification, setClarification] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [dueDateManuallySet, setDueDateManuallySet] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [fileInputKey, setFileInputKey] = useState(0);
   const [analysis, setAnalysis] = useState<AssignmentAnalysis | null>(null);
   const [title, setTitle] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -101,7 +102,7 @@ export default function CreateGroupModal({
       setErrorMessage("Only administrators can analyze group assignments");
       return;
     }
-    if (!description.trim() && !file) {
+    if (!description.trim() && files.length === 0) {
       setErrorMessage("Add a description or upload the assignment instructions");
       return;
     }
@@ -122,7 +123,7 @@ export default function CreateGroupModal({
         String(Math.min(...groups.map((group) => group.length))),
       );
       formData.set("groupCount", String(groups.length));
-      if (file) formData.set("file", file);
+      files.forEach((file) => formData.append("files", file));
       const response = await fetch("/api/assignments/analyze", {
         body: formData,
         headers: { Authorization: `Bearer ${await user.getIdToken()}` },
@@ -178,6 +179,18 @@ export default function CreateGroupModal({
       });
       if (success) {
         setAssignmentRequestId(crypto.randomUUID());
+        setClassId("");
+        setAdministrators("");
+        setMembers("");
+        setDescription("");
+        setClarification("");
+        setDueDate("");
+        setDueDateManuallySet(false);
+        setFiles([]);
+        setFileInputKey((current) => current + 1);
+        setAnalysis(null);
+        setTitle("");
+        setErrorMessage("");
         window.dispatchEvent(new Event("snapschool:assignment-created"));
         return setOpen(false);
       }
@@ -223,9 +236,9 @@ export default function CreateGroupModal({
           </span>
         </label>
         <label className="block space-y-2 text-sm font-medium">Assignment description<textarea className="min-h-28 w-full rounded-xl border border-slate-300 px-3 py-2.5" maxLength={12000} onChange={(event) => setDescription(event.target.value)} placeholder="Describe the group requirements, or upload them below." value={description} /></label>
-        <label className="block space-y-2 text-sm font-medium">Screenshot or document (optional)<input accept=".gif,.jpeg,.jpg,.pdf,.png,.txt,.webp,.doc,.docx" className="block w-full rounded-xl border border-dashed border-indigo-300 p-3 text-xs" onChange={(event) => setFile(event.target.files?.[0] ?? null)} type="file" /><span className="block text-xs font-normal text-slate-500">Maximum 10 MB. Avoid student names, grades, or private information.</span></label>
+        <label className="block space-y-2 text-sm font-medium">Screenshots or documents (optional)<input accept=".gif,.jpeg,.jpg,.pdf,.png,.txt,.webp,.doc,.docx" className="block w-full rounded-xl border border-dashed border-indigo-300 p-3 text-xs" key={fileInputKey} multiple onChange={(event) => { setFiles(Array.from(event.target.files ?? [])); setAnalysis(null); }} type="file" /><span className="block text-xs font-normal text-slate-500">Up to 10 files, 10 MB each and 30 MB combined. Upload pages in reading order. Avoid student names, grades, or private information.</span></label>
         <label className="block space-y-2 text-sm font-medium">Due date (optional before analysis)<input className="w-full rounded-xl border border-slate-300 px-3 py-2.5" min={new Date().toISOString().slice(0, 10)} onChange={(event) => { setDueDate(event.target.value); setDueDateManuallySet(Boolean(event.target.value)); }} type="date" value={dueDate} /></label>
-        <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 font-medium text-white disabled:opacity-60" disabled={isAnalyzing || (!description.trim() && !file)} onClick={() => void analyzeAssignment()} type="button">{isAnalyzing ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}{isAnalyzing ? "Analyzing assignment..." : analysis ? "Analyze again" : "Analyze with AI"}</button>
+        <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 font-medium text-white disabled:opacity-60" disabled={isAnalyzing || (!description.trim() && files.length === 0)} onClick={() => void analyzeAssignment()} type="button">{isAnalyzing ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}{isAnalyzing ? "Analyzing assignment..." : analysis ? "Analyze again" : "Analyze with AI"}</button>
 
         {analysis && <section className="space-y-3 rounded-2xl border-2 border-indigo-400 bg-indigo-50 p-4">{analysis.warnings.length > 0 && <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"><strong>Check before assigning:</strong><ul className="mt-1 list-disc pl-5">{analysis.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div>}<label className="block space-y-2 text-sm font-semibold text-indigo-950">Teacher corrections or clarification<textarea className="min-h-28 w-full rounded-xl border border-indigo-300 bg-white px-3 py-2.5 font-normal text-slate-900" maxLength={4000} onChange={(event) => setClarification(event.target.value)} placeholder="Correct dates, explain coverage, add missing requirements, or clarify any other issue the AI identified." value={clarification} /></label><button className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 font-semibold text-white disabled:opacity-60" disabled={isAnalyzing || !clarification.trim()} onClick={() => void analyzeAssignment()} type="button">{isAnalyzing ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}Re-analyze with my clarification</button></section>}
         {analysis && <section className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4"><p className="font-semibold">Review the suggested plan</p><p className="text-xs text-slate-600">AI estimates can be wrong. Confirm everything before publishing the assignment.</p><label className="block space-y-2 text-sm font-medium">Assignment title<input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5" maxLength={100} minLength={3} onChange={(event) => setTitle(event.target.value)} required value={title} /></label><label className="block space-y-2 text-sm font-medium">Due date (required)<input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5" min={new Date().toISOString().slice(0, 10)} onChange={(event) => { setDueDate(event.target.value); setDueDateManuallySet(Boolean(event.target.value)); }} required type="date" value={dueDate} /></label><div className="grid grid-cols-2 gap-2 text-sm"><div className="rounded-xl bg-white p-3"><span className="block text-slate-500">Effort</span><strong>{analysis.estimatedTotalMinutes} min</strong></div><div className="rounded-xl bg-white p-3"><span className="block text-slate-500">Streak target</span><strong>{analysis.recommendedWorkDays} days</strong></div></div><p className="text-sm leading-6 text-slate-600">{analysis.assignmentSummary}</p><ol className="space-y-2">{analysis.dailyTasks.map((task) => <li className="rounded-xl bg-white p-3 text-sm" key={task.dayNumber}><strong>Day {task.dayNumber}: {task.title}</strong><span className="float-right text-slate-500">{task.estimatedMinutes} min</span><p className="mt-1 text-slate-600">{task.description}</p></li>)}</ol></section>}
