@@ -133,6 +133,7 @@ export function StudentProgressSubmission() {
 
         await channel.sendMessage({
           attachments,
+          snapschool_event: "progress_evidence",
           text: note.trim()
             ? `Progress evidence: ${note.trim()}`
             : "Progress evidence submitted for AI review.",
@@ -142,7 +143,10 @@ export function StudentProgressSubmission() {
           const reviewText = responseBody.approved
             ? `🤖 AI progress review: Today's work is recorded. ${analysis.progressSummary} ${analysis.recommendedRemainingWorkDays} planned work day${analysis.recommendedRemainingWorkDays === 1 ? "" : "s"} remain.`
             : `🤖 AI progress review: This submission did not complete today's goal yet. ${analysis.feedback}`;
-          await channel.sendMessage({ text: reviewText });
+          await channel.sendMessage({
+            snapschool_event: "progress_review",
+            text: reviewText,
+          });
         }
       } catch {
         setErrorMessage(

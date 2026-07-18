@@ -2,6 +2,10 @@ import "stream-chat";
 import type { DefaultChannelData } from "stream-chat-react";
 
 declare module "stream-chat" {
+  interface CustomMessageData {
+    snapschool_event?: "progress_evidence" | "progress_review";
+  }
+
   // Stream v9 uses interface merging to register React's default channel fields.
   interface CustomChannelData extends DefaultChannelData {
     assignment_title?: string;

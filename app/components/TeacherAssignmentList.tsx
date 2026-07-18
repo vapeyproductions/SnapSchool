@@ -12,6 +12,7 @@ import type {
 import { ChannelList } from "stream-chat-react";
 
 import { getAssignmentPriority } from "@/lib/assignment-priority";
+import { isRoutineProgressMessage } from "@/lib/chat-message-classification";
 
 export type TeacherGrouping = "assignment" | "class";
 
@@ -68,8 +69,31 @@ const latestStudentMessage = (channel: Channel) => {
         message.user?.id &&
         message.user.id !== creatorId &&
         message.text?.trim() &&
-        !message.text.startsWith("🤖 AI progress review:"),
+        !isRoutineProgressMessage(message),
     );
+};
+
+const unreadStudentChatCount = (channel: Channel) => {
+  const currentUserId = channel.getClient().userID;
+  const creatorId = channel.data?.created_by_id;
+  const lastRead = currentUserId
+    ? channel.state.read[currentUserId]?.last_read
+    : undefined;
+  const lastReadTime = lastRead ? new Date(lastRead).getTime() : 0;
+
+  return channel.state.messages.filter((message) => {
+    const createdAt = message.created_at
+      ? new Date(message.created_at).getTime()
+      : 0;
+    return Boolean(
+      message.user?.id &&
+        message.user.id !== currentUserId &&
+        message.user.id !== creatorId &&
+        message.text?.trim() &&
+        !isRoutineProgressMessage(message) &&
+        createdAt > lastReadTime,
+    );
+  }).length;
 };
 
 export function TeacherAssignmentList({
@@ -104,7 +128,7 @@ export function TeacherAssignmentList({
     const priority = getAssignmentPriority(channel.data ?? {});
     const studentMessage = latestStudentMessage(channel);
     const hasQuestion = studentMessage?.text?.includes("?");
-    const unread = channel.countUnread();
+    const unread = unreadStudentChatCount(channel);
 
     return (
       <span className="mt-1 block space-y-1 text-xs">

@@ -41,6 +41,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { getAssignmentPriority } from "@/lib/assignment-priority";
+import { isRoutineProgressMessage } from "@/lib/chat-message-classification";
 
 import AssignmentCalendar, { type CalendarAssignment } from "./AssignmentCalendar";
 import { useGetStreamClient } from "./useGetStreamClient";
@@ -173,9 +174,22 @@ const isStudentMessage = (
     message.user?.id &&
       message.user.id !== channel.data?.created_by_id &&
       message.text?.trim() &&
-      !message.text.startsWith("🤖 AI progress review:") &&
-      !message.text.startsWith("Progress evidence"),
+      !isRoutineProgressMessage(message),
   );
+
+const isUnreadStudentMessage = (
+  channel: StreamChannel,
+  message: StreamChannel["state"]["messages"][number],
+  currentUserId: string,
+) => {
+  if (!isStudentMessage(channel, message)) return false;
+  const lastRead = channel.state.read[currentUserId]?.last_read;
+  const lastReadTime = lastRead ? new Date(lastRead).getTime() : 0;
+  const createdAt = message.created_at
+    ? new Date(message.created_at).getTime()
+    : 0;
+  return createdAt > lastReadTime;
+};
 
 function AssignmentManagement({
   assignment,
@@ -749,6 +763,7 @@ export default function AdministratorClassDashboard({
           createdAt: isOpen ? channel.data.teacher_request_created_at : undefined,
           preview: isOpen ? channel.data.teacher_request_question : undefined,
           teacherRequest: true,
+          unreadCount: isOpen ? 1 : 0,
         };
       }
 
@@ -760,6 +775,9 @@ export default function AdministratorClassDashboard({
         createdAt: message?.created_at,
         preview: message?.text,
         teacherRequest: false,
+        unreadCount: channel.state.messages.filter((item) =>
+          isUnreadStudentMessage(channel, item, user.uid),
+        ).length,
       };
     })
     .filter((thread) => Boolean(thread.preview))
@@ -1129,7 +1147,7 @@ export default function AdministratorClassDashboard({
                       {messageThreads.length === 0 ? (
                         <p className="rounded-2xl border-2 border-dashed border-zinc-300 p-5 text-center text-sm text-zinc-500">No student questions yet.</p>
                       ) : (
-                        messageThreads.map(({ channel, preview, teacherRequest }) => (
+                        messageThreads.map(({ channel, preview, teacherRequest, unreadCount }) => (
                           <button
                             className={`rounded-2xl border-2 p-3 text-left ${replyChannelCid === channel.cid ? "border-black bg-[#fffbd5]" : "border-zinc-200 bg-white"}`}
                             key={channel.cid}
@@ -1142,7 +1160,7 @@ export default function AdministratorClassDashboard({
                                   ? `Teacher request · ${channel.data?.teacher_request_requested_by_name || "Group"}`
                                   : studentName(channel)}
                               </strong>
-                              {channel.countUnread() > 0 && <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white">New</span>}
+                              {unreadCount > 0 && <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white">New</span>}
                             </span>
                             <span className="mt-1 block truncate text-xs text-zinc-600">{preview}</span>
                           </button>
@@ -1186,7 +1204,11 @@ export default function AdministratorClassDashboard({
                               user={user}
                             />
                           </div>
-                          <MessageList />
+                          <MessageList
+                            messages={replyChannel.state.messages.filter(
+                              (message) => !isRoutineProgressMessage(message),
+                            )}
+                          />
                           <MessageComposer />
                         </Window>
                       </Channel>
