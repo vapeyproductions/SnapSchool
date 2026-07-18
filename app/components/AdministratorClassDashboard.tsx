@@ -591,24 +591,7 @@ export default function AdministratorClassDashboard({
       );
 
       if (classRecord.assignmentsChanged && client) {
-        try {
-          const individualChannels = await client.queryChannels(
-            {
-              members: { $in: [user.uid] },
-              type: "messaging",
-            } as ChannelFilters,
-            { last_message_at: -1 },
-            { message_limit: 30, state: true, watch: true },
-          );
-          setChannels((current) => [
-            ...individualChannels,
-            ...current.filter((channel) => channel.type !== "messaging"),
-          ]);
-        } catch {
-          setErrorMessage(
-            "The roster was updated, but refresh the page to see the new student assignment records.",
-          );
-        }
+        window.dispatchEvent(new Event("snapschool:assignment-created"));
       }
     };
 
@@ -645,24 +628,32 @@ export default function AdministratorClassDashboard({
           throw new Error(classesResult.error ?? "Unable to load classes");
         }
 
-        const sort: ChannelSort = { last_message_at: -1 };
+        const sort: ChannelSort = { created_at: -1 };
         const options = {
           message_limit: 30,
           state: true,
           watch: true,
         };
         const baseFilter = { members: { $in: [user.uid] } };
+        const queryEveryChannel = async (type: "livestream" | "messaging") => {
+          const allChannels: StreamChannel[] = [];
+          const pageSize = 30;
+
+          for (let offset = 0; offset < 1000; offset += pageSize) {
+            const page = await client.queryChannels(
+              { ...baseFilter, type } as ChannelFilters,
+              sort,
+              { ...options, limit: pageSize, offset },
+            );
+            allChannels.push(...page);
+            if (page.length < pageSize) break;
+          }
+
+          return allChannels;
+        };
         const [individualChannels, groupChannels] = await Promise.all([
-          client.queryChannels(
-            { ...baseFilter, type: "messaging" } as ChannelFilters,
-            sort,
-            options,
-          ),
-          client.queryChannels(
-            { ...baseFilter, type: "livestream" } as ChannelFilters,
-            sort,
-            options,
-          ),
+          queryEveryChannel("messaging"),
+          queryEveryChannel("livestream"),
         ]);
 
         if (cancelled) return;

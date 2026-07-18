@@ -234,17 +234,31 @@ function AuthenticatedStreakPage({
     const loadAssignments = async () => {
       try {
         const baseFilters = { members: { $in: [user.uid] } };
+        const queryEveryChannel = async (type: "livestream" | "messaging") => {
+          const allChannels: StreamChannel[] = [];
+          const pageSize = 30;
+
+          for (let offset = 0; offset < 1000; offset += pageSize) {
+            const page = await client.queryChannels(
+              { ...baseFilters, type } as ChannelFilters,
+              { created_at: -1 },
+              {
+                limit: pageSize,
+                message_limit: 30,
+                offset,
+                state: true,
+                watch: true,
+              },
+            );
+            allChannels.push(...page);
+            if (page.length < pageSize) break;
+          }
+
+          return allChannels;
+        };
         const [individual, group] = await Promise.all([
-          client.queryChannels(
-            { ...baseFilters, type: "messaging" } as ChannelFilters,
-            sort,
-            { message_limit: 30, state: true, watch: true },
-          ),
-          client.queryChannels(
-            { ...baseFilters, type: "livestream" } as ChannelFilters,
-            sort,
-            { message_limit: 30, state: true, watch: true },
-          ),
+          queryEveryChannel("messaging"),
+          queryEveryChannel("livestream"),
         ]);
         if (!cancelled) {
           setAssignmentChannels([...individual, ...group]);
