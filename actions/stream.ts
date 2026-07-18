@@ -323,9 +323,9 @@ const validateAssignmentPlan = (plan: AssignmentPlan) => {
 
   if (
     plan.assignmentSummary.trim().length < 5 ||
-    plan.assignmentSummary.length > 1500
+    plan.assignmentSummary.length > 600
   ) {
-    throw new Error("The assignment summary must be between 5 and 1,500 characters");
+    throw new Error("The assignment summary must be between 5 and 600 characters");
   }
 
   if (
@@ -335,9 +335,9 @@ const validateAssignmentPlan = (plan: AssignmentPlan) => {
       (task, index) =>
         task.dayNumber !== index + 1 ||
         task.title.trim().length < 1 ||
-        task.title.length > 100 ||
+        task.title.length > 70 ||
         task.description.trim().length < 1 ||
-        task.description.length > 500 ||
+        task.description.length > 160 ||
         !Number.isInteger(task.estimatedMinutes) ||
         task.estimatedMinutes < 1 ||
         task.estimatedMinutes > 1440,
@@ -347,8 +347,10 @@ const validateAssignmentPlan = (plan: AssignmentPlan) => {
   }
 
   const dailyPlan = JSON.stringify(plan.dailyTasks);
-  if (dailyPlan.length > 10000) {
-    throw new Error("The daily assignment plan is too large");
+  if (dailyPlan.length > 3400) {
+    throw new Error(
+      "The AI plan is too detailed to publish. Analyze it again with a clarification asking for shorter daily steps.",
+    );
   }
 
   return {
@@ -1024,6 +1026,16 @@ export const createClassAssignment = async (data: {
       };
     }
 
+    // The Firebase extension normally mirrors accounts to Stream. If its
+    // installation was interrupted, valid SchoolSnap users can still be
+    // missing there, so repair that state before creating their channels.
+    await serverClient.upsertUsers(
+      [administrator, ...students].map((profile) => ({
+        id: profile.uid,
+        name: profile.username,
+      })),
+    );
+
     // The browser keeps this request ID stable while the form remains open.
     // A retry therefore targets the same Stream channels instead of creating
     // duplicates for students whose first request already succeeded.
@@ -1035,24 +1047,44 @@ export const createClassAssignment = async (data: {
       .slice(0, 25) || "assignment";
     const results = await Promise.allSettled(
       students.map(async (student, index) => {
+        const channelData = {
+          ...planData,
+          assignment_creator_id: administrator.uid,
+          assignment_title: title,
+          assignment_type: "individual" as const,
+          class_id: schoolClass.id,
+          class_name: schoolClass.name,
+          created_by_id: administrator.uid,
+          members: [administrator.uid, student.uid],
+          name: `${title} · ${student.username}`,
+          student_username: student.username,
+        };
+
+        if (Buffer.byteLength(JSON.stringify(channelData), "utf8") > 4800) {
+          throw new Error(
+            "The AI plan is too detailed for the assignment channel. Update the analysis with a clarification asking for shorter daily steps, then publish again.",
+          );
+        }
+
         const channel = serverClient.channel(
           "messaging",
           `individual-${slug}-${batchId}-${index + 1}`,
-          {
-            ...planData,
-            assignment_creator_id: administrator.uid,
-            assignment_title: title,
-            assignment_type: "individual",
-            class_id: schoolClass.id,
-            class_name: schoolClass.name,
-            created_by_id: administrator.uid,
-            members: [administrator.uid, student.uid],
-            name: `${title} · ${student.username}`,
-            student_username: student.username,
-          },
+          channelData,
         );
 
-        await channel.create();
+        try {
+          await channel.create();
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "";
+          if (!/already exists|channel.*exist|duplicate/i.test(message)) throw error;
+          await channel.updatePartial({
+            set: {
+              ...planData,
+              assignment_title: title,
+              name: `${title} · ${student.username}`,
+            },
+          });
+        }
       }),
     );
     const createdCount = results.filter(
@@ -1060,9 +1092,16 @@ export const createClassAssignment = async (data: {
     ).length;
 
     if (createdCount !== students.length) {
+      const failureMessages = results
+        .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+        .map((result) => result.reason instanceof Error ? result.reason.message : String(result.reason))
+        .filter(Boolean);
+      const failureDetail = [...new Set(failureMessages)][0];
       return {
         createdCount,
-        error: `Created ${createdCount} of ${students.length} assignments. Retry only for students who are missing one.`,
+        error:
+          `Created ${createdCount} of ${students.length} assignments.` +
+          (failureDetail ? ` Stream reported: ${failureDetail.slice(0, 500)}` : " Please retry the missing assignments."),
         success: false,
       };
     }

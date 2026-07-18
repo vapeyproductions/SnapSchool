@@ -38,6 +38,7 @@ export default function CreateStreakModal({
   const [errorMessage, setErrorMessage] = useState("");
   const [classId, setClassId] = useState("");
   const [description, setDescription] = useState("");
+  const [clarification, setClarification] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [dueDateManuallySet, setDueDateManuallySet] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -89,6 +90,7 @@ export default function CreateStreakModal({
     try {
       const formData = new FormData();
       formData.set("description", description.trim());
+      formData.set("clarification", clarification.trim());
       if (dueDateManuallySet && dueDate) formData.set("dueDateOverride", dueDate);
       if (file) formData.set("file", file);
 
@@ -227,6 +229,16 @@ export default function CreateStreakModal({
             <div className="text-sm"><p className="font-medium">Why this workload</p><p className="mt-1 leading-6 text-slate-600">{analysis.workloadRationale}</p></div>
             <div><p className="text-sm font-medium">{["test", "quiz", "exam"].includes(analysis.assignmentKind) ? "Daily study plan" : "Daily plan"}</p><ol className="mt-2 space-y-2">{analysis.dailyTasks.map((task) => <li className="rounded-xl bg-white p-3 text-sm" key={task.dayNumber}><div className="flex justify-between gap-3"><strong>Day {task.dayNumber}: {task.title}</strong><span className="shrink-0 text-slate-500">{task.estimatedMinutes} min</span></div><p className="mt-1 leading-5 text-slate-600">{task.description}</p></li>)}</ol></div>
             {analysis.warnings.length > 0 && <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800"><strong>Check before assigning:</strong><ul className="mt-1 list-disc pl-5">{analysis.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div>}
+            <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3">
+              <label className="block space-y-2 text-sm font-medium">
+                Correct or clarify the AI analysis
+                <textarea className="min-h-24 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5" maxLength={4000} onChange={(event) => setClarification(event.target.value)} placeholder="Example: Use July 27–28 as printed. Each reading check only covers the chapters immediately before it. Our edition ends on page 202." value={clarification} />
+              </label>
+              <button className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 font-semibold text-white disabled:opacity-60" disabled={isAnalyzing || !clarification.trim()} onClick={() => void analyzeAssignment()} type="button">
+                {isAnalyzing ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+                Update plan with clarification
+              </button>
+            </div>
           </div>
         )}
 

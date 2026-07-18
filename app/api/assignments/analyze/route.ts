@@ -167,15 +167,15 @@ const assignmentSchema = {
       enum: ["essay", "exam", "homework", "other", "project", "quiz", "reading", "test"],
       type: "string",
     },
-    assignmentSummary: { type: "string" },
+    assignmentSummary: { maxLength: 600, type: "string" },
     dailyTasks: {
       items: {
         additionalProperties: false,
         properties: {
           dayNumber: { type: "integer" },
-          description: { type: "string" },
+          description: { maxLength: 160, type: "string" },
           estimatedMinutes: { type: "integer" },
-          title: { type: "string" },
+          title: { maxLength: 70, type: "string" },
         },
         required: ["dayNumber", "description", "estimatedMinutes", "title"],
         type: "object",
@@ -190,9 +190,9 @@ const assignmentSchema = {
     estimatedTotalMinutes: { type: "integer" },
     inputValid: { type: "boolean" },
     recommendedWorkDays: { type: "integer" },
-    suggestedTitle: { type: "string" },
-    warnings: { items: { type: "string" }, type: "array" },
-    workloadRationale: { type: "string" },
+    suggestedTitle: { maxLength: 100, type: "string" },
+    warnings: { items: { maxLength: 400, type: "string" }, type: "array" },
+    workloadRationale: { maxLength: 600, type: "string" },
   },
   required: [
     "assignmentKind", "assignmentSummary", "dailyTasks", "detectedDueDate", "dueDateConfidence",
@@ -220,6 +220,7 @@ export async function POST(request: Request) {
     }
 
     const description = String(formData.get("description") ?? "").trim();
+    const clarification = String(formData.get("clarification") ?? "").trim();
     const teacherDueDate = String(formData.get("dueDateOverride") ?? "").trim();
     const groupWorkerCountRaw = String(formData.get("groupWorkerCount") ?? "").trim();
     const groupCountRaw = String(formData.get("groupCount") ?? "").trim();
@@ -232,6 +233,7 @@ export async function POST(request: Request) {
 
     if (!description && !file) return errorResponse("Add a description or upload an assignment file", 400);
     if (description.length > 12000) return errorResponse("The description must be 12,000 characters or less", 400);
+    if (clarification.length > 4000) return errorResponse("The clarification must be 4,000 characters or less", 400);
     if (teacherDueDate && !/^\d{4}-\d{2}-\d{2}$/.test(teacherDueDate)) return errorResponse("Enter a valid due date", 400);
     if (!Number.isInteger(groupWorkerCount) || groupWorkerCount < 1 || groupWorkerCount > 100) return errorResponse("Enter a valid group size", 400);
     if (!Number.isInteger(groupCount) || groupCount < 1 || groupCount > 30) return errorResponse("Enter a valid number of groups", 400);
@@ -246,9 +248,11 @@ export async function POST(request: Request) {
         `Teacher-entered due-date override: ${teacherDueDate || "none"}. Only this explicitly entered override supersedes dates found in the source.\n` +
         `This plan will be shared once across ${groupCount} group${groupCount === 1 ? "" : "s"}. The smallest group has ${groupWorkerCount} student workers, so make every step achievable by that group size.\n` +
         `Teacher description: ${description || "none"}.\n\n` +
+        `Teacher clarification after reviewing an earlier analysis: ${clarification || "none"}. Treat this clarification as authoritative when it resolves ambiguity in the source.\n\n` +
         "Extract a concise title and the actual deliverables. Estimate realistic student work time. " +
         "Classify the work as essay, exam, homework, other, project, quiz, reading, or test. " +
         "Recommend 1-60 active workdays and produce exactly one manageable task for each recommended day. " +
+        "Keep the plan concise enough for a classroom dashboard: task titles must be at most 70 characters, task descriptions at most 160 characters, the summary at most 600 characters, and the workload rationale at most 600 characters. " +
         (groupWorkerCount > 1
           ? "This is a collaborative assignment. Account for the number of workers, identify tasks that can happen in parallel, include coordination and integration checkpoints, and make each daily step a concrete shared team outcome rather than multiplying the workload by the group size. "
           : "") +

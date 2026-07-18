@@ -30,6 +30,7 @@ export default function CreateGroupModal({
   const [isLoadingClasses, setIsLoadingClasses] = useState(true);
   const [members, setMembers] = useState("");
   const [description, setDescription] = useState("");
+  const [clarification, setClarification] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [dueDateManuallySet, setDueDateManuallySet] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -101,6 +102,7 @@ export default function CreateGroupModal({
     try {
       const formData = new FormData();
       formData.set("description", description.trim());
+      formData.set("clarification", clarification.trim());
       if (dueDateManuallySet && dueDate) formData.set("dueDateOverride", dueDate);
       formData.set(
         "groupWorkerCount",
@@ -207,6 +209,7 @@ export default function CreateGroupModal({
         <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 font-medium text-white disabled:opacity-60" disabled={isAnalyzing || (!description.trim() && !file)} onClick={() => void analyzeAssignment()} type="button">{isAnalyzing ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}{isAnalyzing ? "Analyzing assignment..." : analysis ? "Analyze again" : "Analyze with AI"}</button>
 
         {analysis && <section className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4"><p className="font-semibold">Review the suggested plan</p><p className="text-xs text-slate-600">AI estimates can be wrong. Confirm everything before publishing the assignment.</p><label className="block space-y-2 text-sm font-medium">Assignment title<input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5" maxLength={100} minLength={3} onChange={(event) => setTitle(event.target.value)} required value={title} /></label><label className="block space-y-2 text-sm font-medium">Due date (required)<input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5" min={new Date().toISOString().slice(0, 10)} onChange={(event) => { setDueDate(event.target.value); setDueDateManuallySet(Boolean(event.target.value)); }} required type="date" value={dueDate} /></label><div className="grid grid-cols-2 gap-2 text-sm"><div className="rounded-xl bg-white p-3"><span className="block text-slate-500">Effort</span><strong>{analysis.estimatedTotalMinutes} min</strong></div><div className="rounded-xl bg-white p-3"><span className="block text-slate-500">Streak target</span><strong>{analysis.recommendedWorkDays} days</strong></div></div><p className="text-sm leading-6 text-slate-600">{analysis.assignmentSummary}</p><ol className="space-y-2">{analysis.dailyTasks.map((task) => <li className="rounded-xl bg-white p-3 text-sm" key={task.dayNumber}><strong>Day {task.dayNumber}: {task.title}</strong><span className="float-right text-slate-500">{task.estimatedMinutes} min</span><p className="mt-1 text-slate-600">{task.description}</p></li>)}</ol></section>}
+        {analysis && <section className="space-y-3 rounded-2xl border border-indigo-200 bg-indigo-50 p-4"><label className="block space-y-2 text-sm font-medium">Correct or clarify the AI analysis<textarea className="min-h-24 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5" maxLength={4000} onChange={(event) => setClarification(event.target.value)} placeholder="Explain ambiguous dates, coverage, requirements, or edition differences." value={clarification} /></label><button className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 font-semibold text-white disabled:opacity-60" disabled={isAnalyzing || !clarification.trim()} onClick={() => void analyzeAssignment()} type="button">{isAnalyzing ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}Update plan with clarification</button></section>}
         {errorMessage && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{errorMessage}</p>}
         {analysis && <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white disabled:opacity-60" disabled={isCreating || !classId || !dueDate || !title.trim()} type="submit">{isCreating && <Loader2 className="size-4 animate-spin" />}{isCreating ? "Publishing groups..." : `Publish assignment to ${parseGroups().length} group${parseGroups().length === 1 ? "" : "s"}`}</button>}
       </form>
