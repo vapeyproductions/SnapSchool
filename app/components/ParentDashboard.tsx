@@ -116,40 +116,39 @@ export default function ParentDashboard({
           <div><ShieldCheck className="mx-auto size-10 text-zinc-400" /><p className="mt-3 font-black">No approved student connections</p><p className="mt-1 max-w-md text-sm text-zinc-500">Open Profile Settings, request access using the student&apos;s username, and have the student approve it from their own settings.</p></div>
         </div>
       ) : (
-        <div className="grid min-h-[30rem] md:grid-cols-[14rem_minmax(0,1fr)]">
-          <aside className="border-b-2 border-black bg-[#fffbd5] p-3 md:border-b-0 md:border-r-2">
-            <p className="mb-3 text-xs font-black uppercase tracking-wider">Students</p>
-            <div className="grid gap-2">
+        <div className={dashboardView === "calendar" ? "min-h-[30rem]" : "grid min-h-[30rem] md:grid-cols-[14rem_minmax(0,1fr)]"}>
+          <aside className={dashboardView === "calendar" ? "border-b-2 border-black bg-white p-4" : "border-b-2 border-black bg-[#fffbd5] p-3 md:border-b-0 md:border-r-2"}>
+            <p className="text-xs font-black uppercase tracking-[0.14em]">{dashboardView === "calendar" ? "Calendar scope" : "Students"}</p>
+            {dashboardView === "calendar" && (
+              <p className="mt-1 text-xs text-zinc-500">Review every connected student together or focus on one schedule.</p>
+            )}
+            <div className={dashboardView === "calendar" ? "mt-3 flex flex-wrap gap-2" : "mt-3 grid gap-2"}>
               {dashboardView === "calendar" && (
                 <button
-                  className={`rounded-2xl border-2 border-black p-3 text-left font-black ${calendarChildUid === "all" ? "bg-black text-white shadow-[3px_3px_0_#7b61ff]" : "bg-white"}`}
+                  aria-pressed={calendarChildUid === "all"}
+                  className={`rounded-full border-2 border-black px-4 py-2 text-xs font-black ${calendarChildUid === "all" ? "bg-black text-white" : "bg-white"}`}
                   onClick={() => setCalendarChildUid("all")}
                   type="button"
                 >
-                  All students
-                  <span className={`mt-1 block text-xs font-medium ${calendarChildUid === "all" ? "text-zinc-300" : "text-zinc-500"}`}>
-                    {children.reduce((total, child) => total + child.assignments.filter((assignment) => assignment.progressPercent < 100).length, 0)} active assignments
-                  </span>
+                  All Students
                 </button>
               )}
               {children.map((child) => (
-                <button className={`rounded-2xl border-2 border-black p-3 text-left font-black capitalize ${(dashboardView === "calendar" ? calendarChildUid === child.studentUid : selectedChild?.studentUid === child.studentUid) ? "bg-black text-white shadow-[3px_3px_0_#7b61ff]" : "bg-white"}`} key={child.studentUid} onClick={() => dashboardView === "calendar" ? setCalendarChildUid(child.studentUid) : setSelectedChildUid(child.studentUid)} type="button">
+                <button aria-pressed={dashboardView === "calendar" ? calendarChildUid === child.studentUid : undefined} className={`${dashboardView === "calendar" ? "rounded-full px-4 py-2 text-xs" : "rounded-2xl p-3 text-left"} border-2 border-black font-black capitalize ${(dashboardView === "calendar" ? calendarChildUid === child.studentUid : selectedChild?.studentUid === child.studentUid) ? `bg-black text-white ${dashboardView === "calendar" ? "" : "shadow-[3px_3px_0_#7b61ff]"}` : "bg-white"}`} key={child.studentUid} onClick={() => dashboardView === "calendar" ? setCalendarChildUid(child.studentUid) : setSelectedChildUid(child.studentUid)} type="button">
                   {child.studentUsername}
-                  <span className={`mt-1 block text-xs font-medium ${(dashboardView === "calendar" ? calendarChildUid === child.studentUid : selectedChild?.studentUid === child.studentUid) ? "text-zinc-300" : "text-zinc-500"}`}>{child.assignments.filter((assignment) => assignment.progressPercent < 100).length} active assignments</span>
+                  {dashboardView !== "calendar" && <span className={`mt-1 block text-xs font-medium ${selectedChild?.studentUid === child.studentUid ? "text-zinc-300" : "text-zinc-500"}`}>{child.assignments.filter((assignment) => assignment.progressPercent < 100).length} active assignments</span>}
                 </button>
               ))}
             </div>
           </aside>
 
-          <section className="min-w-0 p-4 sm:p-5">
-            <div className="mb-4">
+          <section className={dashboardView === "calendar" ? "min-w-0" : "min-w-0 p-4 sm:p-5"}>
+            {dashboardView !== "calendar" && <div className="mb-4">
               <p className="text-2xl font-black capitalize">
-                {dashboardView === "calendar" && calendarChildUid === "all"
-                  ? "All students’ calendar"
-                  : `${(dashboardView === "calendar" ? calendarChildren[0]?.studentUsername : selectedChild?.studentUsername) ?? "Student"}’s ${dashboardView === "calendar" ? "calendar" : "assignments"}`}
+                {selectedChild?.studentUsername ?? "Student"}&apos;s assignments
               </p>
               <p className="text-sm text-zinc-500">Progress updates appear after the student submits evidence and the AI reviews it.</p>
-            </div>
+            </div>}
             {dashboardView === "calendar" ? (
               <AssignmentCalendar
                 assignments={calendarChildren.flatMap((child) => child.assignments

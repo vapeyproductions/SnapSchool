@@ -64,6 +64,7 @@ function StudentAssignmentCalendar({
   onOpenAssignment: () => void;
 }) {
   const { setActiveChannel } = useChatContext("StudentAssignmentCalendar");
+  const [calendarClassId, setCalendarClassId] = useState("all");
   const assignments = useMemo<CalendarAssignment[]>(
     () => channels
       .filter((channel) => {
@@ -83,17 +84,66 @@ function StudentAssignmentCalendar({
       })),
     [channels],
   );
+  const classOptions = useMemo(() => {
+    const options = new Map<string, string>();
+    assignments.forEach((assignment) => {
+      const id = assignment.classId || `class:${assignment.className.trim().toLowerCase()}`;
+      if (!options.has(id)) options.set(id, assignment.className);
+    });
+    return [...options.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((first, second) => first.name.localeCompare(second.name));
+  }, [assignments]);
+  const selectedClassId = calendarClassId === "all" || classOptions.some((option) => option.id === calendarClassId)
+    ? calendarClassId
+    : "all";
+  const selectedClass = classOptions.find((option) => option.id === selectedClassId);
+  const visibleAssignments = selectedClassId === "all"
+    ? assignments
+    : assignments.filter(
+        (assignment) =>
+          (assignment.classId || `class:${assignment.className.trim().toLowerCase()}`) === selectedClassId,
+      );
 
   return (
-    <AssignmentCalendar
-      assignments={assignments}
-      onAssignmentSelect={(assignmentId) => {
-        const channel = channels.find((candidate) => candidate.cid === assignmentId);
-        if (!channel) return;
-        setActiveChannel(channel);
-        onOpenAssignment();
-      }}
-    />
+    <div className="min-w-0 bg-[#f4f0e8]">
+      <div className="border-b-2 border-black bg-white p-4">
+        <p className="text-xs font-black uppercase tracking-[0.14em]">Calendar scope</p>
+        <p className="mt-1 text-xs text-zinc-500">See every class together or focus on one class at a time.</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            aria-pressed={selectedClassId === "all"}
+            className={`rounded-full border-2 border-black px-4 py-2 text-xs font-black ${selectedClassId === "all" ? "bg-black text-white" : "bg-white"}`}
+            onClick={() => setCalendarClassId("all")}
+            type="button"
+          >
+            All Classes
+          </button>
+          {classOptions.map((classOption) => (
+            <button
+              aria-pressed={selectedClassId === classOption.id}
+              className={`rounded-full border-2 border-black px-4 py-2 text-xs font-black ${selectedClassId === classOption.id ? "bg-black text-white" : "bg-white"}`}
+              key={classOption.id}
+              onClick={() => setCalendarClassId(classOption.id)}
+              type="button"
+            >
+              {classOption.name}
+            </button>
+          ))}
+        </div>
+      </div>
+      <AssignmentCalendar
+        assignments={visibleAssignments}
+        emptyMessage={selectedClassId === "all" ? "No active assignments are scheduled yet." : `${selectedClass?.name ?? "This class"} has no active assignments scheduled.`}
+        onAssignmentSelect={(assignmentId) => {
+          const channel = channels.find((candidate) => candidate.cid === assignmentId);
+          if (!channel) return;
+          setActiveChannel(channel);
+          onOpenAssignment();
+        }}
+        title={selectedClassId === "all" ? "All Classes" : `${selectedClass?.name ?? "Class"} calendar`}
+      />
+    </div>
   );
 }
 
