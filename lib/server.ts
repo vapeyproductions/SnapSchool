@@ -361,10 +361,30 @@ export const changeAvatar = async (photoURLValue: string) => {
         }
 
         if (profile.exists()) {
-          transaction.set(profileRef, { photoURL, updatedAt: serverTimestamp() }, { merge: true });
+          transaction.set(
+            profileRef,
+            {
+              photoURL,
+              updatedAt: serverTimestamp(),
+              ...(profileData?.role === "student" && !profileData.studentMode
+                ? { studentMode: "school" }
+                : {}),
+            },
+            { merge: true },
+          );
         }
         if (usernameProfile.exists()) {
-          transaction.set(usernameRef, { photoURL, updatedAt: serverTimestamp() }, { merge: true });
+          transaction.set(
+            usernameRef,
+            {
+              photoURL,
+              updatedAt: serverTimestamp(),
+              ...(usernameData?.role === "student" && !usernameData.studentMode
+                ? { studentMode: "school" }
+                : {}),
+            },
+            { merge: true },
+          );
         }
       });
     } catch (error) {
