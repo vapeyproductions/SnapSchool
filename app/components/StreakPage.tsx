@@ -247,7 +247,7 @@ function AuthenticatedStreakPage({
                 message_limit: 30,
                 offset,
                 state: true,
-                watch: true,
+                watch: false,
               },
             );
             allChannels.push(...page);

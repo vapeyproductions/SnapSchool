@@ -2,7 +2,7 @@
 
 import type { User } from "firebase/auth";
 import { CalendarDays, CheckCircle2, Clock3, Loader2, Pencil, ShieldCheck, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { getParentDashboard, type ParentAssignmentSummary, type ParentChildDashboard } from "@/actions/profile";
 import { deletePublishedAssignment, updatePublishedAssignment } from "@/actions/stream";
@@ -109,20 +109,33 @@ export default function ParentDashboard({
   const [deletingCid, setDeletingCid] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [selectedAssignmentId, setSelectedAssignmentId] = useState("");
+  const loadInFlightRef = useRef(false);
 
-  const loadDashboard = async () => {
-    const firebaseIdToken = await user.getIdToken();
-    setIsLoading(true);
-    setErrorMessage("");
-    const result = await getParentDashboard(firebaseIdToken);
-    if (result.success) {
-      setChildren(result.children);
-      setSelectedChildUid((current) => current || result.children[0]?.studentUid || "");
-    } else {
-      setErrorMessage(result.error ?? "Unable to load family dashboard");
+  const loadDashboard = useCallback(async (showLoading = true) => {
+    if (loadInFlightRef.current) return;
+    loadInFlightRef.current = true;
+    try {
+      const firebaseIdToken = await user.getIdToken();
+      if (showLoading) setIsLoading(true);
+      setErrorMessage("");
+      const result = await getParentDashboard(firebaseIdToken);
+      if (result.success) {
+        setChildren(result.children);
+        setSelectedChildUid((current) =>
+          result.children.some((child) => child.studentUid === current)
+            ? current
+            : result.children[0]?.studentUid || "",
+        );
+      } else {
+        setErrorMessage(result.error ?? "Unable to load family dashboard");
+      }
+    } catch {
+      setErrorMessage("Unable to load the student’s latest assignment plan");
+    } finally {
+      loadInFlightRef.current = false;
+      if (showLoading) setIsLoading(false);
     }
-    setIsLoading(false);
-  };
+  }, [user]);
 
   const deletePersonalAssignment = async (cid: string, title: string) => {
     if (!window.confirm(`Delete “${title}”? This removes its plan and submitted progress permanently.`)) return;
@@ -143,36 +156,28 @@ export default function ParentDashboard({
   };
 
   useEffect(() => {
-    let active = true;
-    user.getIdToken()
-      .then((firebaseIdToken) => getParentDashboard(firebaseIdToken))
-      .then((result) => {
-        if (!active) return;
-        if (result.success) {
-          setChildren(result.children);
-          setSelectedChildUid((current) =>
-            result.children.some((child) => child.studentUid === current)
-              ? current
-              : result.children[0]?.studentUid || "",
-          );
-        } else {
-          setErrorMessage(result.error ?? "Unable to load family dashboard");
-        }
-        setIsLoading(false);
-      })
-      .catch(() => {
-        if (!active) return;
-        setErrorMessage("Unable to load family dashboard");
-        setIsLoading(false);
-      });
-    return () => { active = false; };
-  }, [refreshKey, user]);
+    const initialLoad = window.setTimeout(() => void loadDashboard(), 0);
+    return () => window.clearTimeout(initialLoad);
+  }, [loadDashboard, refreshKey]);
 
   useEffect(() => {
-    const refreshAfterCreation = () => { void loadDashboard(); };
-    window.addEventListener("snapschool:assignment-created", refreshAfterCreation);
-    return () => window.removeEventListener("snapschool:assignment-created", refreshAfterCreation);
-  });
+    const refreshLatestPlan = () => { void loadDashboard(false); };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") refreshLatestPlan();
+    };
+    const interval = window.setInterval(refreshLatestPlan, 60_000);
+    window.addEventListener("focus", refreshLatestPlan);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    window.addEventListener("snapschool:assignment-created", refreshLatestPlan);
+    window.addEventListener("snapschool:assignment-progress-updated", refreshLatestPlan);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshLatestPlan);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      window.removeEventListener("snapschool:assignment-created", refreshLatestPlan);
+      window.removeEventListener("snapschool:assignment-progress-updated", refreshLatestPlan);
+    };
+  }, [loadDashboard]);
 
   const schedulesByChild = useMemo(
     () => new Map(

@@ -616,8 +616,16 @@ export default function AdministratorClassDashboard({
   useEffect(() => {
     if (!client) return;
     let cancelled = false;
+    let loadInFlight = false;
+    let reloadRequested = false;
+    let reloadTimer: ReturnType<typeof setTimeout> | undefined;
 
     const loadDashboard = async (showLoading = true) => {
+      if (loadInFlight) {
+        reloadRequested = true;
+        return;
+      }
+      loadInFlight = true;
       if (showLoading) setLoading(true);
       setErrorMessage("");
 
@@ -627,12 +635,15 @@ export default function AdministratorClassDashboard({
         if (!classesResult.success) {
           throw new Error(classesResult.error ?? "Unable to load classes");
         }
+        if (cancelled) return;
+        setClasses(classesResult.classes);
+        setSelectedClassId((current) => current || classesResult.classes[0]?.id || "");
 
         const sort: ChannelSort = { created_at: -1 };
         const options = {
           message_limit: 30,
           state: true,
-          watch: true,
+          watch: false,
         };
         const baseFilter = { members: { $in: [user.uid] } };
         const queryEveryChannel = async (type: "livestream" | "messaging") => {
@@ -680,23 +691,32 @@ export default function AdministratorClassDashboard({
             return channel;
           },
         );
-        setClasses(classesResult.classes);
         setChannels(dashboardChannels);
-        setSelectedClassId((current) => current || classesResult.classes[0]?.id || "");
       } catch (error) {
         if (!cancelled) {
+          const message = error instanceof Error
+            ? error.message
+            : "Unable to load the class dashboard";
           setErrorMessage(
-            error instanceof Error ? error.message : "Unable to load the class dashboard",
+            /too many requests|error code 9/i.test(message)
+              ? "Stream is temporarily catching up. Your classes are still available; wait a moment and use Refresh to update assignment activity."
+              : message,
           );
         }
       } finally {
+        loadInFlight = false;
         if (!cancelled && showLoading) setLoading(false);
+        if (!cancelled && reloadRequested) {
+          reloadRequested = false;
+          reloadTimer = setTimeout(() => void loadDashboard(false), 750);
+        }
       }
     };
 
     void loadDashboard();
     const handleAssignmentCreated = () => {
-      void loadDashboard(false);
+      if (reloadTimer) clearTimeout(reloadTimer);
+      reloadTimer = setTimeout(() => void loadDashboard(false), 750);
     };
     window.addEventListener(
       "snapschool:assignment-created",
@@ -713,6 +733,7 @@ export default function AdministratorClassDashboard({
 
     return () => {
       cancelled = true;
+      if (reloadTimer) clearTimeout(reloadTimer);
       window.removeEventListener(
         "snapschool:assignment-created",
         handleAssignmentCreated,
@@ -968,13 +989,18 @@ export default function AdministratorClassDashboard({
           </div>
         </aside>
 
-        <section className={`min-w-0 overflow-hidden bg-white ${selectedAssignment || errorMessage ? "hidden" : "block"}`}>
+        <section className={`min-w-0 overflow-hidden bg-white ${selectedAssignment ? "hidden" : "block"}`}>
           <div className="border-b-2 border-black px-5 py-5">
             <p className="text-xl font-black">{selectedClass?.name ?? "Assignments"}</p>
             <p className="mt-1 text-sm text-zinc-500">
               Choose an assignment to review progress or respond to student questions.
             </p>
           </div>
+          {errorMessage && (
+            <p className="mx-4 mt-4 rounded-2xl border-2 border-amber-500 bg-amber-50 p-3 text-sm font-semibold text-amber-900" role="alert">
+              {errorMessage}
+            </p>
+          )}
           <div className="grid gap-3 p-4 lg:grid-cols-2 2xl:grid-cols-3">
             {assignments.length === 0 ? (
               <p className="rounded-2xl border-2 border-dashed border-zinc-300 p-5 text-center text-sm text-zinc-500">
@@ -1039,12 +1065,8 @@ export default function AdministratorClassDashboard({
           </div>
         </section>
 
-        <main className={`min-w-0 overflow-hidden bg-[#f4f0e8] ${selectedAssignment || errorMessage ? "block" : "hidden"}`}>
-          {errorMessage ? (
-            <p className="m-4 rounded-2xl border-2 border-red-600 bg-red-50 p-4 text-sm font-semibold text-red-700" role="alert">
-              {errorMessage}
-            </p>
-          ) : !selectedAssignment ? (
+        <main className={`min-w-0 overflow-hidden bg-[#f4f0e8] ${selectedAssignment ? "block" : "hidden"}`}>
+          {!selectedAssignment ? (
             <div className="flex min-h-[32rem] items-center justify-center p-6 text-center">
               <div>
                 <School className="mx-auto size-10 text-zinc-400" />

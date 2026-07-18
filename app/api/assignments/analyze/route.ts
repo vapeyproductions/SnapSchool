@@ -268,7 +268,7 @@ export async function POST(request: Request) {
         (groupWorkerCount > 1
           ? "This is a collaborative assignment. Account for the number of workers, identify tasks that can happen in parallel, include coordination and integration checkpoints, and make each daily step a concrete shared team outcome rather than multiplying the workload by the group size. "
           : "") +
-        "Use calendar time between today and the due date when one is known. Do not invent a due date. " +
+        "Treat the due date as the submission or in-class hand-in date, never as a normal work day. When a due date is known, schedule the final task no later than the calendar day BEFORE it is due and count available workdays from today through that prior day. Never schedule ordinary work on or after the due date. If there is no full pre-deadline workday available, flag that clearly instead of inventing future work. Do not invent a due date. " +
         "When the source is a schedule containing several dated milestones, preserve those milestones in the summary and plan and use the final relevant deadline as detectedDueDate. If dates omit a year, resolve them to the nearest future occurrence that preserves the source's chronological order. Never substitute today's date for an undated or yearless deadline. " +
         "For a dated reading schedule, prefer one concrete task per reading or assessment milestone, with limited preparation tasks where useful; do not create a separate task for every calendar day. " +
         "SPECIAL RULE FOR TESTS, QUIZZES, AND EXAMS: Create a study plan rather than a completion checklist. " +

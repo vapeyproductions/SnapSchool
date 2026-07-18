@@ -50,6 +50,12 @@ export const buildBalancedAssignmentSchedules = (
   const dailyMinutes = new Map<string, number>();
   const dailyClasses = new Map<string, Set<string>>();
   const schedules: AssignmentSchedules = {};
+  const progressMadeToday = assignments.some((assignment) => {
+    if (!assignment.lastProgressAt) return false;
+    const progressDate = new Date(assignment.lastProgressAt);
+    return !Number.isNaN(progressDate.getTime()) &&
+      localDateKey(progressDate) === todayKey;
+  });
 
   const activeAssignments = assignments
     .map((assignment) => {
@@ -58,8 +64,11 @@ export const buildBalancedAssignmentSchedules = (
         assignment.dailyPlan.length,
       );
       const dueDate = parseDate(assignment.dueDate);
-      const effectiveDueDate = dueDate && dueDate >= today
-        ? dueDate
+      // A future due date is the hand-in day, not an available homework day.
+      // Due or overdue work still receives an immediate recovery slot so it
+      // never disappears from the student's plan.
+      const effectiveDueDate = dueDate && dueDate > today
+        ? addDays(dueDate, -1)
         : dueDate
           ? today
           : addDays(today, Math.max(7, assignment.dailyPlan.length));
@@ -89,7 +98,11 @@ export const buildBalancedAssignmentSchedules = (
         (daysSinceProgress !== null &&
           daysSinceProgress > 1 &&
           remainingTasks.length >= Math.max(1, baseAvailableDays - 1));
-      const scheduleStartOffset = daysSinceProgress === 0 && !initiallyUrgent
+      const protectRestOfToday =
+        progressMadeToday &&
+        !initiallyUrgent &&
+        baseAvailableDays > 1;
+      const scheduleStartOffset = protectRestOfToday
         ? 1
         : 0;
       const availableDays = Math.max(
@@ -101,10 +114,12 @@ export const buildBalancedAssignmentSchedules = (
         ...assignment,
         availableDays,
         completedSteps,
+        daysSinceProgress,
         dueDate,
         effectiveDueDate,
         remainingMinutes,
         remainingTasks,
+        protectRestOfToday,
         scheduleStartOffset,
         urgent: initiallyUrgent,
       };
@@ -186,6 +201,72 @@ export const buildBalancedAssignmentSchedules = (
       previousOffset = chosenOffset;
     });
   });
+
+  // Completing one mission should normally leave the student with a real
+  // stopping point for the day. Only pull one next mission from another
+  // assignment into today when doing so removes at least 15 minutes of work
+  // above the 60-minute comfort ceiling on a future day. Deadline-critical
+  // work already bypasses this protection through the urgency rules above.
+  if (progressMadeToday) {
+    const todayScheduledMinutes = dailyMinutes.get(todayKey) ?? 0;
+    const candidates = activeAssignments
+      .filter(
+        (assignment) =>
+          assignment.protectRestOfToday &&
+          assignment.daysSinceProgress !== 0 &&
+          assignment.remainingTasks.length > 0,
+      )
+      .map((assignment) => {
+        const taskIndex = assignment.completedSteps;
+        const scheduledDate = schedules[assignment.id]?.[taskIndex] ?? null;
+        const task = assignment.remainingTasks[0];
+        const futureMinutes = scheduledDate
+          ? dailyMinutes.get(scheduledDate) ?? 0
+          : 0;
+        const overloadReduction = Math.min(
+          task.estimatedMinutes,
+          Math.max(0, futureMinutes - 60),
+        );
+        return {
+          assignment,
+          futureMinutes,
+          overloadReduction,
+          scheduledDate,
+          task,
+          taskIndex,
+        };
+      })
+      .filter(
+        (candidate) =>
+          Boolean(candidate.scheduledDate) &&
+          candidate.scheduledDate !== todayKey &&
+          candidate.futureMinutes >= 75 &&
+          candidate.overloadReduction >= 15 &&
+          todayScheduledMinutes + candidate.task.estimatedMinutes <= 60,
+      )
+      .sort(
+        (first, second) =>
+          second.overloadReduction - first.overloadReduction ||
+          second.futureMinutes - first.futureMinutes,
+      );
+
+    const candidate = candidates[0];
+    if (candidate?.scheduledDate) {
+      schedules[candidate.assignment.id][candidate.taskIndex] = todayKey;
+      dailyMinutes.set(
+        candidate.scheduledDate,
+        Math.max(
+          0,
+          (dailyMinutes.get(candidate.scheduledDate) ?? 0) -
+            candidate.task.estimatedMinutes,
+        ),
+      );
+      dailyMinutes.set(
+        todayKey,
+        todayScheduledMinutes + candidate.task.estimatedMinutes,
+      );
+    }
+  }
 
   // Anything that could not be dated safely is due today, which is preferable
   // to silently hiding work from the student's daily total.

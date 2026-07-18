@@ -79,8 +79,8 @@ export const getAssignmentPriority = (
   const completedDays = data.completed_work_days ?? 0;
   const targetDays = data.recommended_work_days ?? 0;
   const completed = targetDays > 0 && completedDays >= targetDays;
-  const availableDays = daysUntilDue === null ? 14 : Math.max(1, daysUntilDue + 1);
-  const minutesPerAvailableDay = remainingMinutes / availableDays;
+  const availableDays = daysUntilDue === null ? 14 : Math.max(0, daysUntilDue);
+  const minutesPerAvailableDay = remainingMinutes / Math.max(1, availableDays);
   const remainingPlanDays = Math.max(0, targetDays - completedDays);
   const completionPercent = targetDays > 0
     ? Math.min(100, Math.round((completedDays / targetDays) * 100))
@@ -99,7 +99,8 @@ export const getAssignmentPriority = (
       ? "missed"
       : "active";
   const onSchedule =
-    daysUntilDue === null || remainingPlanDays <= availableDays;
+    daysUntilDue === null ||
+    (availableDays > 0 && remainingPlanDays <= availableDays);
   const paceStatus: AssignmentPriority["paceStatus"] = completed
     ? "complete"
     : completedDays === 0

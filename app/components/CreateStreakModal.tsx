@@ -23,12 +23,23 @@ import {
 } from "@/components/ui/dialog";
 import type { AssignmentAnalysis } from "@/lib/assignment-analysis";
 
+const earliestPlanningDueDate = () => {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return [
+    tomorrow.getFullYear(),
+    String(tomorrow.getMonth() + 1).padStart(2, "0"),
+    String(tomorrow.getDate()).padStart(2, "0"),
+  ].join("-");
+};
+
 export default function CreateStreakModal({
   setOpen,
 }: {
   setOpen: Dispatch<React.SetStateAction<boolean>>;
 }) {
   const { role, user } = useContext(AuthContext);
+  const minimumDueDate = earliestPlanningDueDate();
   const [assignmentRequestId, setAssignmentRequestId] = useState(() => crypto.randomUUID());
   const [classes, setClasses] = useState<SchoolClassSummary[]>([]);
   const [classesLoaded, setClassesLoaded] = useState(false);
@@ -155,6 +166,10 @@ export default function CreateStreakModal({
       setErrorMessage("A due date is required before assigning this work");
       return;
     }
+    if (dueDate < minimumDueDate) {
+      setErrorMessage("Choose a due date of at least tomorrow so the plan can finish the day before it is due");
+      return;
+    }
 
     setIsCreating(true);
     try {
@@ -268,7 +283,7 @@ export default function CreateStreakModal({
           </label>
           <label className="block space-y-2 text-sm font-medium">
             Due date (optional before analysis)
-            <span className="relative block"><CalendarDays className="absolute left-3 top-3 size-4 text-slate-400" /><input className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-3" min={new Date().toISOString().slice(0, 10)} onChange={(event) => { setDueDate(event.target.value); setDueDateManuallySet(Boolean(event.target.value)); }} type="date" value={dueDate} /></span>
+            <span className="relative block"><CalendarDays className="absolute left-3 top-3 size-4 text-slate-400" /><input className="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-3" min={minimumDueDate} onChange={(event) => { setDueDate(event.target.value); setDueDateManuallySet(Boolean(event.target.value)); }} type="date" value={dueDate} /></span>
             <span className="block text-xs font-normal text-slate-500">Your date overrides one detected in the uploaded assignment.</span>
           </label>
           <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 font-medium text-white hover:bg-indigo-700 disabled:opacity-60" disabled={isAnalyzing || (!description.trim() && files.length === 0)} onClick={() => void analyzeAssignment()} type="button">
@@ -292,7 +307,7 @@ export default function CreateStreakModal({
               </button>
             </div>
             <label className="block space-y-2 text-sm font-medium">Assignment title<input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5" maxLength={100} minLength={3} onChange={(event) => setTitle(event.target.value)} required value={title} /></label>
-            <label className="block space-y-2 text-sm font-medium">Due date (required)<input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5" min={new Date().toISOString().slice(0, 10)} onChange={(event) => { setDueDate(event.target.value); setDueDateManuallySet(Boolean(event.target.value)); }} required type="date" value={dueDate} /></label>
+            <label className="block space-y-2 text-sm font-medium">Due date (required)<input className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5" min={minimumDueDate} onChange={(event) => { setDueDate(event.target.value); setDueDateManuallySet(Boolean(event.target.value)); }} required type="date" value={dueDate} /></label>
             <div className="grid grid-cols-2 gap-3 text-sm"><div className="rounded-xl bg-white p-3"><span className="block text-slate-500">Estimated effort</span><strong>{analysis.estimatedTotalMinutes} minutes</strong></div><div className="rounded-xl bg-white p-3"><span className="block text-slate-500">Streak target</span><strong>{analysis.recommendedWorkDays} work days</strong></div></div>
             <div className="text-sm"><p className="font-medium">Summary</p><p className="mt-1 leading-6 text-slate-600">{analysis.assignmentSummary}</p></div>
             <div className="text-sm"><p className="font-medium">Why this workload</p><p className="mt-1 leading-6 text-slate-600">{analysis.workloadRationale}</p></div>

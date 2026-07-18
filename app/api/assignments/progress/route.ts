@@ -234,10 +234,16 @@ export async function POST(request: Request) {
     const dueDate = channel.data.due_date;
     const dueTime = new Date(`${dueDate}T00:00:00Z`).getTime();
     const todayTime = new Date(`${today}T00:00:00Z`).getTime();
-    const availableDays = Math.max(0, Math.floor((dueTime - todayTime) / 86400000) + 1);
-    // Once the due date has passed, create a short recovery plan instead of
-    // incorrectly treating unfinished work as complete because zero days remain.
-    const planningWindowDays = availableDays > 0 ? availableDays : 7;
+    const daysUntilDue = Math.floor((dueTime - todayTime) / 86400000);
+    // The hand-in date is not a normal workday. Future plans can use today
+    // through the day before it is due. Overdue work receives a separate
+    // accelerated recovery window.
+    const availableDays = Math.max(0, daysUntilDue);
+    const planningWindowDays = availableDays > 0
+      ? availableDays
+      : daysUntilDue < 0
+        ? 7
+        : 1;
     const currentTasks = parseTasks(channel.data.daily_plan);
 
     const streakUrl =
@@ -267,8 +273,8 @@ export async function POST(request: Request) {
         (isGroupAssignment
           ? `This is a shared group assignment with ${groupMemberCount} channel members. Review progress toward the team's shared outcome, not only the submitting student's individual effort. Previously reviewed member contributions: ${JSON.stringify(groupContributions)}. Recent visible group activity: ${JSON.stringify(recentGroupActivity)}. Use this activity to recognize work members have reported or shared, identify visible gaps, and propose coordinated next steps. Do not assume unreported work is complete.\n`
           : "") +
-        `Today: ${today}. Due date: ${dueDate}. Calendar days before the deadline including today: ${availableDays}.\n` +
-        `Planning window: ${planningWindowDays} days. ${availableDays === 0 ? "The deadline has passed, so create an accelerated recovery plan and strongly encourage immediate communication with the teacher." : "Keep the plan within the original deadline."}\n` +
+        `Today: ${today}. Due date: ${dueDate}. Available normal workdays, counting today through the calendar day BEFORE the due date: ${availableDays}. The due date itself is for submission or in-class use and is not a normal workday.\n` +
+        `Planning window: ${planningWindowDays} days. ${daysUntilDue < 0 ? "The deadline has passed, so create an accelerated recovery plan and strongly encourage immediate communication with the teacher." : daysUntilDue === 0 ? "The assignment is due today and no normal pre-deadline workday remains. If unfinished, create one immediate emergency completion-and-submission step rather than scheduling work on future dates." : "Keep every revised task within the original deadline and finish no later than the day before it is due."}\n` +
         `Assignment summary: ${channel.data.assignment_summary ?? "Not provided"}.\n` +
         `Previously completed work days: ${completedWorkDays}.\n` +
         `Remaining plan: ${JSON.stringify(remainingTasks)}.\n` +
@@ -277,7 +283,7 @@ export async function POST(request: Request) {
           ? `The student uploaded ${files.length} evidence ${files.length === 1 ? "file" : "files"}. Treat multiple photos as pages or views of the same progress submission and avoid double-counting repeated content. Read the printed and handwritten text that is visible in every uploaded image. For worksheets, compare visibly answered, attempted, or completed questions and sections with the total questions and sections visible across the images, and estimate an overall completion percentage. Judge only work visibly supported by the uploaded evidence; do not infer hidden work and do not grade correctness. If part of the worksheet is outside the photo, state that limitation in warnings and lower confidence instead of assuming it is complete. `
           : "The student submitted a written progress statement without a file. For reading and other tasks that do not naturally create visible evidence, accept a specific self-report when it clearly matches today's mission. For example, 'I read Chapter 1' is sufficient when Chapter 1 is today's assigned reading. Label the work as self-reported, use medium confidence unless the statement includes useful specifics, and do not demand photographic proof for inherently non-visual work. Reject only statements that are too vague, unrelated, or do not claim meaningful progress toward today's task. ") +
         "Set progressSufficient true only when the submitted update shows meaningful progress toward today's planned assignment work. " +
-        "Then describe what is complete, what remains, and rebuild the remaining plan so it fits within the planning window. " +
+        "Then describe what is complete, what remains, and rebuild the remaining plan so it fits within the planning window. For work that is not already overdue, the final planned task must be completed no later than the day before the due date. " +
         "Prefer roughly 20-60 minutes per active workday. Use fewer active days rather than many tiny tasks under 20 minutes unless the remaining assignment itself is shorter, and exceed 60 minutes only when the deadline makes it unavoidable. " +
         (isGroupAssignment
           ? "For the revised group plan, use concrete team outcomes, parallel work where appropriate, and coordination or integration checkpoints. "

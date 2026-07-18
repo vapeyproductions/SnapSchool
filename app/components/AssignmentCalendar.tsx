@@ -111,7 +111,10 @@ const buildCalendarItems = (
     today.getDate(),
   ).getTime();
   const availableSpan = dueDate
-    ? Math.max(0, Math.round((dueDate.getTime() - todayTime) / DAY_MS))
+    ? Math.max(
+        0,
+        Math.round((dueDate.getTime() - todayTime) / DAY_MS) - 1,
+      )
     : Math.max(0, remainingTasks.length - 1);
 
   remainingTasks.forEach((task, index) => {

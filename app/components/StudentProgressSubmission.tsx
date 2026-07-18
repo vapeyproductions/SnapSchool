@@ -155,6 +155,11 @@ export function StudentProgressSubmission() {
       }
 
       if (responseBody.approved) {
+        window.dispatchEvent(
+          new CustomEvent("snapschool:assignment-progress-updated", {
+            detail: { cid: channel.cid },
+          }),
+        );
         setFiles([]);
         setNote("");
         if (fileInputRef.current) fileInputRef.current.value = "";
