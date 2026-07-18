@@ -164,14 +164,17 @@ export const changeDisplayName = async (displayNameValue: string) => {
       const update = { displayName, updatedAt: serverTimestamp() };
       const stableProfileData = stableProfile.data();
       const usernameProfileData = usernameProfile.data();
+      const stableProfileNeedsStudentMode =
+        stableProfileData?.role === "student" &&
+        !Object.prototype.hasOwnProperty.call(stableProfileData, "studentMode");
+      const usernameProfileNeedsStudentMode =
+        usernameProfileData?.role === "student" &&
+        !Object.prototype.hasOwnProperty.call(usernameProfileData, "studentMode");
       transaction.set(
         profileRef,
         {
           ...update,
-          ...(stableProfileData?.role === "student" &&
-          !stableProfileData.studentMode
-            ? { studentMode: "school" }
-            : {}),
+          ...(stableProfileNeedsStudentMode ? { studentMode: "school" } : {}),
         },
         { merge: true },
       );
@@ -179,10 +182,7 @@ export const changeDisplayName = async (displayNameValue: string) => {
         usernameRef,
         {
           ...update,
-          ...(usernameProfileData?.role === "student" &&
-          !usernameProfileData.studentMode
-            ? { studentMode: "school" }
-            : {}),
+          ...(usernameProfileNeedsStudentMode ? { studentMode: "school" } : {}),
         },
         { merge: true },
       );

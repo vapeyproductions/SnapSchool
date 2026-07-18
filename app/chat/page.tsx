@@ -43,6 +43,7 @@ export default function ChatPage() {
   const [dailyEstimatedMinutes, setDailyEstimatedMinutes] = useState(0);
   const [dashboardView, setDashboardView] = useState<"assignments" | "calendar">("assignments");
   const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
+  const [isRefreshingDashboard, setIsRefreshingDashboard] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
   const [adultMode, setAdultMode] = useState(false);
@@ -106,6 +107,12 @@ export default function ChatPage() {
     setIsLoggingOut(false);
   };
 
+  const refreshDashboard = () => {
+    setIsRefreshingDashboard(true);
+    setDashboardRefreshKey((current) => current + 1);
+    window.setTimeout(() => setIsRefreshingDashboard(false), 800);
+  };
+
   return (
     <div className={`snapschool-shell min-h-screen text-[#171717] ${adultMode && canUseAdultMode ? "adult-mode" : ""}`}>
       <header className="snapschool-header sticky top-0 z-40 border-b-2 border-black bg-[#fffc00]">
@@ -167,11 +174,12 @@ export default function ChatPage() {
             <button
               aria-label="Refresh dashboard"
               className="snapschool-refresh-button flex size-10 items-center justify-center rounded-full border-2 border-black bg-white transition hover:-translate-y-0.5 hover:bg-zinc-100"
-              onClick={() => setDashboardRefreshKey((current) => current + 1)}
+              disabled={isRefreshingDashboard}
+              onClick={refreshDashboard}
               title="Refresh classes and assignments"
               type="button"
             >
-              <RefreshCw className="size-4" />
+              <RefreshCw className={`size-4 ${isRefreshingDashboard ? "animate-spin" : ""}`} />
             </button>
             <button
               aria-label="Choose profile avatar"
@@ -308,6 +316,7 @@ export default function ChatPage() {
 
           <div className="p-2 sm:p-4">
             <StreakPage
+              key={`dashboard-${dashboardRefreshKey}`}
               dashboardView={dashboardView}
               refreshKey={dashboardRefreshKey}
               onDashboardViewChange={setDashboardView}
