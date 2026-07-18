@@ -10,7 +10,7 @@ import type { AssignmentAnalysis } from "@/lib/assignment-analysis";
 
 import AuthContext from "./AuthContext";
 
-type AssignableStudent = { classNames: string[]; uid: string; username: string };
+type AssignableStudent = { classNames: string[]; displayName: string; uid: string; username: string };
 
 export default function CreateIndependentAssignmentModal({
   setOpen,
@@ -147,10 +147,10 @@ export default function CreateIndependentAssignmentModal({
             <span className="flex items-center gap-2"><UserRound className="size-4" /> Assignment for</span>
             {role === "parent" ? (
               <select className="w-full rounded-xl border-2 border-black bg-white px-3 py-2.5 capitalize" onChange={(event) => { setTargetStudentUid(event.target.value); setClassName(""); setAnalysis(null); }} required value={targetStudentUid}>
-                {students.map((student) => <option key={student.uid} value={student.uid}>{student.username}</option>)}
+                {students.map((student) => <option key={student.uid} value={student.uid}>{student.displayName} (@{student.username})</option>)}
               </select>
             ) : (
-              <p className="rounded-xl border-2 border-black bg-[#fffbd5] px-3 py-2.5 font-black capitalize">{selectedStudent?.username}</p>
+              <p className="rounded-xl border-2 border-black bg-[#fffbd5] px-3 py-2.5 font-black">{selectedStudent?.displayName}</p>
             )}
           </label>
 
@@ -190,7 +190,7 @@ export default function CreateIndependentAssignmentModal({
               <div className="grid grid-cols-2 gap-3 text-sm"><div className="rounded-xl bg-white p-3"><span className="block text-zinc-500">Estimated effort</span><strong>{analysis.estimatedTotalMinutes} min</strong></div><div className="rounded-xl bg-white p-3"><span className="block text-zinc-500">Streak plan</span><strong>{analysis.recommendedWorkDays} days</strong></div></div>
               <p className="text-sm leading-6 text-zinc-700">{analysis.assignmentSummary}</p>
               <details className="rounded-xl bg-white p-3"><summary className="cursor-pointer font-black">Review daily missions</summary><ol className="mt-3 space-y-2">{analysis.dailyTasks.map((task) => <li className="rounded-xl bg-zinc-100 p-3 text-sm" key={task.dayNumber}><strong>Day {task.dayNumber}: {task.title}</strong><span className="float-right text-zinc-500">{task.estimatedMinutes} min</span><p className="mt-1 text-zinc-600">{task.description}</p></li>)}</ol></details>
-              <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-black text-white disabled:opacity-60" disabled={isCreating || !title.trim() || !className.trim() || !dueDate} type="submit">{isCreating && <Loader2 className="size-4 animate-spin" />}{isCreating ? "Adding assignment…" : `Add to ${selectedStudent?.username ?? "student"}`}</button>
+              <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-black text-white disabled:opacity-60" disabled={isCreating || !title.trim() || !className.trim() || !dueDate} type="submit">{isCreating && <Loader2 className="size-4 animate-spin" />}{isCreating ? "Adding assignment…" : `Add to ${selectedStudent?.displayName ?? "student"}`}</button>
             </section>
           )}
           {errorMessage && <p className="rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{errorMessage}</p>}

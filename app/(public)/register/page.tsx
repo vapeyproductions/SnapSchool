@@ -107,6 +107,23 @@ export default function RegisterPage() {
         <input type="hidden" name="role" value={accountType} />
 
         <div className="space-y-2">
+          <label className="block text-sm font-medium" htmlFor="displayName">
+            Display name
+          </label>
+          <input
+            required
+            autoComplete="name"
+            type="text"
+            id="displayName"
+            maxLength={60}
+            name="displayName"
+            placeholder={accountType === "administrator" ? "Example: Mr. Brown" : "Example: Eva"}
+            className="w-full rounded-2xl border-2 border-black px-3 py-2.5 outline-none transition focus:shadow-[2px_2px_0_#111]"
+          />
+          <p className="text-xs text-zinc-500">This is the friendly name people will see in SnapSchool.</p>
+        </div>
+
+        <div className="space-y-2">
           <label className="block text-sm font-medium" htmlFor="username">
             Username
           </label>
@@ -116,8 +133,10 @@ export default function RegisterPage() {
             type="text"
             id="username"
             name="username"
+            placeholder="Unique username"
             className="w-full rounded-2xl border-2 border-black px-3 py-2.5 outline-none transition focus:shadow-[2px_2px_0_#111]"
           />
+          <p className="text-xs text-zinc-500">Used to connect accounts and manage class rosters.</p>
         </div>
 
         <div className="space-y-2">

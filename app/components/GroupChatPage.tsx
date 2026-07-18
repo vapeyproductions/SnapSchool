@@ -30,8 +30,8 @@ function LoadingChat() {
   );
 }
 
-function AuthenticatedGroupChat({ user }: { user: User }) {
-  const { client } = useGetStreamClient(user);
+function AuthenticatedGroupChat({ displayName, user }: { displayName: string; user: User }) {
+  const { client } = useGetStreamClient(user, displayName);
 
   const filters: ChannelFilters = {
     members: { $in: [user.uid] },
@@ -70,9 +70,9 @@ function AuthenticatedGroupChat({ user }: { user: User }) {
 }
 
 export default function GroupChatPage() {
-  const { user, loading } = useContext(AuthContext);
+  const { displayName, user, loading } = useContext(AuthContext);
 
   if (loading || !user) return <LoadingChat />;
 
-  return <AuthenticatedGroupChat user={user} />;
+  return <AuthenticatedGroupChat displayName={displayName} user={user} />;
 }

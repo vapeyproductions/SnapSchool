@@ -21,15 +21,19 @@ import {
 import type { AccountRole } from "@/lib/server";
 
 type AuthContextValue = {
+  displayName: string;
   user: User | null;
   loading: boolean;
   role: AccountRole | null;
+  username: string;
 };
 
 const AuthContext = createContext<AuthContextValue>({
+  displayName: "",
   user: null,
   loading: true,
   role: null,
+  username: "",
 });
 
 export function AuthProvider({
@@ -40,6 +44,8 @@ export function AuthProvider({
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState<AccountRole | null>(null);
+  const [displayName, setDisplayName] = useState("");
+  const [username, setUsername] = useState("");
   const router = useRouter();
 
   useEffect(() => {
@@ -51,6 +57,8 @@ export function AuthProvider({
 
       if (!currentUser) {
         setRole(null);
+        setDisplayName("");
+        setUsername("");
         setLoading(false);
         router.replace("/login");
         return;
@@ -81,7 +89,17 @@ export function AuthProvider({
         if (!profile.exists()) {
           profile = await getDoc(doc(db, "users", currentUser.displayName));
         }
-        const storedRole = profile.data()?.role;
+        const profileData = profile.data();
+        const storedRole = profileData?.role;
+        const storedUsername =
+          typeof profileData?.username === "string"
+            ? profileData.username.trim().toLowerCase()
+            : currentUser.displayName?.trim().toLowerCase() ?? "";
+        const storedDisplayName =
+          typeof profileData?.displayName === "string" &&
+          profileData.displayName.trim()
+            ? profileData.displayName.trim()
+            : storedUsername;
         const verifiedRole =
           storedRole === "student" || storedRole === "administrator" || storedRole === "parent"
             ? storedRole
@@ -89,6 +107,8 @@ export function AuthProvider({
 
         if (!active) return;
         setRole(verifiedRole);
+        setUsername(storedUsername);
+        setDisplayName(storedDisplayName);
         if (verifiedRole) cacheAccountRole(currentUser.uid, verifiedRole);
         else clearCachedAccountRole(currentUser.uid);
       } catch {
@@ -119,7 +139,7 @@ export function AuthProvider({
   }
 
   return (
-    <AuthContext.Provider value={{ loading, role, user }}>
+    <AuthContext.Provider value={{ displayName, loading, role, user, username }}>
       {children}
     </AuthContext.Provider>
   );

@@ -37,7 +37,7 @@ service cloud.firestore {
         && request.resource.data.username == resource.data.username
         && request.resource.data.role == resource.data.role
         && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['photoURL', 'updatedAt', 'studentMode'])
+          .hasOnly(['displayName', 'photoURL', 'updatedAt', 'studentMode'])
         && (
           (resource.data.role != 'student'
             && !request.resource.data.diff(resource.data).affectedKeys()
@@ -70,7 +70,7 @@ service cloud.firestore {
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.role == resource.data.role
         && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['username', 'photoURL', 'updatedAt', 'studentMode'])
+          .hasOnly(['displayName', 'username', 'photoURL', 'updatedAt', 'studentMode'])
         && (
           (resource.data.role != 'student'
             && !request.resource.data.diff(resource.data).affectedKeys()

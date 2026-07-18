@@ -193,6 +193,7 @@ function StudentAssignmentCalendar({
 }
 
 function AuthenticatedStreakPage({
+  displayName,
   user,
   dashboardView,
   onDashboardViewChange,
@@ -200,8 +201,8 @@ function AuthenticatedStreakPage({
   refreshKey,
   setReminderMessage,
   setStreakReminder,
-}: StreakPageProps & { user: User }) {
-  const { client } = useGetStreamClient(user);
+}: StreakPageProps & { displayName: string; user: User }) {
+  const { client } = useGetStreamClient(user, displayName);
   const [assignmentChannels, setAssignmentChannels] = useState<StreamChannel[]>([]);
   const [channelError, setChannelError] = useState("");
   const [mobileAssignmentOpen, setMobileAssignmentOpen] = useState(false);
@@ -359,13 +360,14 @@ export default function StreakPage({
   setReminderMessage,
   setStreakReminder,
 }: StreakPageProps) {
-  const { role, user, loading } = useContext(AuthContext);
+  const { displayName, role, user, loading } = useContext(AuthContext);
 
   if (loading || !user || !role) return <LoadingStreaks />;
 
   if (role === "administrator") {
     return (
       <AdministratorClassDashboard
+        displayName={displayName}
         dashboardView={dashboardView}
         onDashboardViewChange={onDashboardViewChange}
         refreshKey={refreshKey}
@@ -387,6 +389,7 @@ export default function StreakPage({
 
   return (
     <AuthenticatedStreakPage
+      displayName={displayName}
       user={user}
       dashboardView={dashboardView}
       onDashboardViewChange={onDashboardViewChange}

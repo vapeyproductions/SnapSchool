@@ -54,6 +54,7 @@ type VerifiedFirebaseAccount = {
 };
 
 type UserProfile = {
+  displayName: string;
   role: AccountRole;
   studentMode?: "independent" | "school";
   uid: string;
@@ -137,7 +138,11 @@ const getProfile = async (
     throw new Error(`The user "${normalizedUsername}" has an invalid profile`);
   }
 
+  const displayName =
+    document.fields?.displayName?.stringValue?.trim() || normalizedUsername;
+
   return {
+    displayName,
     role,
     studentMode:
       role === "student" && studentModeValue === "independent"
@@ -178,7 +183,10 @@ const getProfileByUid = async (
       username &&
       (role === "student" || role === "administrator" || role === "parent")
     ) {
+      const displayName =
+        document.fields?.displayName?.stringValue?.trim() || username;
       return {
+        displayName,
         role,
         studentMode:
           role === "student" && studentModeValue === "independent"
@@ -887,10 +895,11 @@ export const updateSchoolClass = async (data: {
                     estimated_total_minutes:
                       templateData?.estimated_total_minutes,
                     members: [creatorId, student.uid],
-                    name: `${title} · ${student.username}`,
+                    name: `${title} · ${student.displayName}`,
                     recommended_work_days:
                       templateData?.recommended_work_days,
                     student_username: student.username,
+                    student_display_name: student.displayName,
                   },
                 );
 
@@ -1061,7 +1070,7 @@ export const createClassAssignment = async (data: {
     await serverClient.upsertUsers(
       [administrator, ...uniqueStudents.values()].map((profile) => ({
         id: profile.uid,
-        name: profile.username,
+        name: profile.displayName,
       })),
     );
 
@@ -1089,7 +1098,8 @@ export const createClassAssignment = async (data: {
           class_name: schoolClass.name,
           created_by_id: administrator.uid,
           members: [administrator.uid, student.uid],
-          name: `${title} · ${student.username}`,
+          name: `${title} · ${student.displayName}`,
+          student_display_name: student.displayName,
           student_username: student.username,
         };
 
@@ -1114,7 +1124,8 @@ export const createClassAssignment = async (data: {
             set: {
               ...planData,
               assignment_title: title,
-              name: `${title} · ${student.username}`,
+              name: `${title} · ${student.displayName}`,
+              student_display_name: student.displayName,
             },
           });
         }
@@ -1227,7 +1238,8 @@ export const createPersonalAssignment = async (data: {
         class_name: className,
         created_by_id: creator.uid,
         members: [student.uid],
-        name: `${title} · ${student.username}`,
+        name: `${title} · ${student.displayName}`,
+        student_display_name: student.displayName,
         student_username: student.username,
       },
     );
@@ -1734,7 +1746,7 @@ export const updatePublishedAssignment = async (data: {
               ? channelData.due_date
               : data.dueDate,
             name: channelData.student_username
-              ? `${title} · ${channelData.student_username}`
+              ? `${title} · ${channelData.student_display_name ?? channelData.student_username}`
               : title,
           },
         }),
@@ -1927,7 +1939,7 @@ export const requestTeacherForGroupAssignment = async (data: {
         teacher_request_id: requestId,
         teacher_request_question: question,
         teacher_request_requested_by: student.uid,
-        teacher_request_requested_by_name: student.username,
+        teacher_request_requested_by_name: student.displayName,
         teacher_request_status: "open",
       },
       unset: ["teacher_request_resolved_at", "teacher_request_resolved_by"],
@@ -1943,7 +1955,7 @@ export const requestTeacherForGroupAssignment = async (data: {
       question,
       requestId,
       requestedBy: student.uid,
-      requestedByName: student.username,
+      requestedByName: student.displayName,
       success: true,
     };
   } catch (error) {

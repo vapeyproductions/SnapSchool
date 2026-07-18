@@ -6,7 +6,7 @@ import { useCreateChatClient } from "stream-chat-react";
 
 import { createToken } from "@/actions/stream";
 
-export const useGetStreamClient = (user: User) => {
+export const useGetStreamClient = (user: User, displayName?: string) => {
   const tokenProvider = useCallback(
     async () => createToken(await user.getIdToken()),
     [user],
@@ -15,10 +15,10 @@ export const useGetStreamClient = (user: User) => {
   const userData = useMemo(
     () => ({
       id: user.uid,
-      name: user.displayName ?? user.email?.split("@")[0] ?? "User",
+      name: displayName || user.displayName || user.email?.split("@")[0] || "User",
       image: user.photoURL ?? "",
     }),
-    [user.displayName, user.email, user.photoURL, user.uid],
+    [displayName, user.displayName, user.email, user.photoURL, user.uid],
   );
 
   const client = useCreateChatClient({

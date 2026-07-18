@@ -31,7 +31,7 @@ import { clearCachedAccountRole } from "@/lib/auth-role-cache";
 import { logoutUser } from "@/lib/server";
 
 export default function ChatPage() {
-  const { role, user } = useContext(AuthContext);
+  const { displayName: profileDisplayName, role, user, username } = useContext(AuthContext);
   const router = useRouter();
   const [openStreakModal, setOpenStreakModal] = useState(false);
   const [openGroupModal, setOpenGroupModal] = useState(false);
@@ -47,7 +47,8 @@ export default function ChatPage() {
   const [logoutError, setLogoutError] = useState("");
   const [adultMode, setAdultMode] = useState(false);
 
-  const displayName = user?.displayName || user?.email?.split("@")[0] || "User";
+  const displayName =
+    profileDisplayName || username || user?.email?.split("@")[0] || "User";
   const isAdministrator = role === "administrator";
   const isParent = role === "parent";
   const isStudent = role === "student";

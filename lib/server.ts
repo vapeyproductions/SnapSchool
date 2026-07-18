@@ -31,17 +31,24 @@ export const registerUser = async (form: FormData) => {
     const username = String(form.get("username") ?? "")
       .trim()
       .toLowerCase();
+    const displayName = String(form.get("displayName") ?? "")
+      .trim()
+      .replace(/\s+/g, " ");
     const roleValue = form.get("role");
     const imageBaseUrl = process.env.NEXT_PUBLIC_IMAGE_URL;
 
-    if (!email || !password || !username) {
-      throw new Error("Email, password, and username are required");
+    if (!email || !password || !username || !displayName) {
+      throw new Error("Display name, email, password, and username are required");
     }
 
     if (!/^[a-z0-9_.-]{3,30}$/.test(username)) {
       throw new Error(
         "Username must be 3-30 characters and use only letters, numbers, dots, underscores, or hyphens",
       );
+    }
+
+    if (displayName.length > 60) {
+      throw new Error("Display name must be 60 characters or fewer");
     }
 
     if (password.length < 8) {
@@ -87,6 +94,7 @@ export const registerUser = async (form: FormData) => {
       const profileData = {
         uid: user.uid,
         username,
+        displayName,
         email: user.email,
         photoURL,
         role,
@@ -119,6 +127,51 @@ export const registerUser = async (form: FormData) => {
       message:
         error instanceof Error ? error.message : "Unable to create account",
       error,
+    };
+  }
+};
+
+export const changeDisplayName = async (displayNameValue: string) => {
+  const user = auth.currentUser;
+  const displayName = displayNameValue.trim().replace(/\s+/g, " ");
+
+  try {
+    if (!user) throw new Error("You must be signed in");
+    if (!displayName) throw new Error("Enter a display name");
+    if (displayName.length > 60) {
+      throw new Error("Display name must be 60 characters or fewer");
+    }
+
+    const profileRef = doc(db, "profiles", user.uid);
+    const profile = await getDoc(profileRef);
+    const username = profile.data()?.username?.trim().toLowerCase();
+    if (!profile.exists() || !username || profile.data()?.uid !== user.uid) {
+      throw new Error("Your profile could not be verified");
+    }
+
+    const usernameRef = doc(db, "users", username);
+    await runTransaction(db, async (transaction) => {
+      const [stableProfile, usernameProfile] = await Promise.all([
+        transaction.get(profileRef),
+        transaction.get(usernameRef),
+      ]);
+      if (
+        stableProfile.data()?.uid !== user.uid ||
+        usernameProfile.data()?.uid !== user.uid
+      ) {
+        throw new Error("Your profile could not be verified");
+      }
+      const update = { displayName, updatedAt: serverTimestamp() };
+      transaction.set(profileRef, update, { merge: true });
+      transaction.set(usernameRef, update, { merge: true });
+    });
+
+    return { success: true, message: "Display name updated successfully" };
+  } catch (error) {
+    return {
+      success: false,
+      message:
+        error instanceof Error ? error.message : "Unable to update display name",
     };
   }
 };

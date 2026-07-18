@@ -14,7 +14,7 @@ import {
 } from "@/actions/profile";
 import { DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getAvatarChoices } from "@/lib/avatar-options";
-import { changeAvatar, changeUsername } from "@/lib/server";
+import { changeAvatar, changeDisplayName, changeUsername } from "@/lib/server";
 
 import AuthContext from "./AuthContext";
 
@@ -26,7 +26,7 @@ const defaultParentEmailPreferences: ParentEmailPreferences = {
 };
 
 export default function ProfileSettingsModal() {
-  const { role, user } = useContext(AuthContext);
+  const { displayName, role, user, username } = useContext(AuthContext);
   const [connections, setConnections] = useState<FamilyConnection[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [busyId, setBusyId] = useState("");
@@ -94,6 +94,24 @@ export default function ProfileSettingsModal() {
     }
     setMessage(result.message);
     await user?.reload();
+    window.location.reload();
+  };
+
+  const updateDisplayName = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setBusyId("display-name");
+    setErrorMessage("");
+    setMessage("");
+    const nextDisplayName = String(
+      new FormData(event.currentTarget).get("displayName") ?? "",
+    );
+    const result = await changeDisplayName(nextDisplayName);
+    if (!result.success) {
+      setErrorMessage(result.message);
+      setBusyId("");
+      return;
+    }
+    setMessage(result.message);
     window.location.reload();
   };
 
@@ -214,15 +232,28 @@ export default function ProfileSettingsModal() {
       >
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="font-black capitalize">{user?.displayName}</p>
+            <p className="font-black">{displayName || username}</p>
             <p className="text-xs font-semibold capitalize text-zinc-500">
-              {role} account
+              @{username} · {role} account
             </p>
           </div>
           <span className="rounded-full bg-black px-3 py-1 text-[10px] font-black uppercase tracking-wider text-white">Account</span>
         </div>
+        <form className="mt-4 flex flex-col gap-2 sm:flex-row" onSubmit={updateDisplayName}>
+          <label className="min-w-0 flex-1">
+            <span className="mb-1 block text-xs font-black uppercase tracking-wider">Display name</span>
+            <input className="w-full rounded-xl border-2 border-black bg-white px-3 py-2.5" defaultValue={displayName || username} maxLength={60} name="displayName" required />
+          </label>
+          <button className="self-end rounded-xl border-2 border-black bg-white px-4 py-2.5 font-black disabled:opacity-60" disabled={busyId === "display-name"} type="submit">
+            {busyId === "display-name" ? "Updating…" : "Change display name"}
+          </button>
+        </form>
+        <p className="mt-2 text-xs text-zinc-500">This is the friendly name shown on dashboards. It does not need to be unique.</p>
         <form className="mt-4 flex flex-col gap-2 sm:flex-row" onSubmit={updateUsername}>
-          <input className="min-w-0 flex-1 rounded-xl border-2 border-black bg-white px-3 py-2.5" defaultValue={user?.displayName ?? ""} minLength={3} maxLength={30} name="username" required />
+          <label className="min-w-0 flex-1">
+            <span className="mb-1 block text-xs font-black uppercase tracking-wider">Unique username</span>
+            <input className="w-full rounded-xl border-2 border-black bg-white px-3 py-2.5" defaultValue={username} minLength={3} maxLength={30} name="username" required />
+          </label>
           <button className="rounded-xl border-2 border-black bg-[#fffc00] px-4 py-2.5 font-black disabled:opacity-60" disabled={busyId === "username"} type="submit">
             {busyId === "username" ? "Updating…" : "Change username"}
           </button>
@@ -359,7 +390,7 @@ export default function ProfileSettingsModal() {
             {connections.length === 0 && !isLoading && <p className="rounded-xl bg-white/70 p-3 text-sm">No student connections yet.</p>}
             {connections.map((connection) => (
               <div className="flex items-center justify-between rounded-xl border border-black/20 bg-white p-3" key={connection.id}>
-                <span><strong className="block capitalize">{connection.studentUsername}</strong><span className="text-xs capitalize text-zinc-500">{connection.status}</span></span>
+                <span><strong className="block">{connection.studentDisplayName}</strong><span className="text-xs text-zinc-500">@{connection.studentUsername} · <span className="capitalize">{connection.status}</span></span></span>
                 <button className="rounded-full border border-black px-2 py-1 text-[10px] font-black disabled:opacity-50" disabled={busyId === connection.id} onClick={() => void removeConnection(connection.id)} type="button">{connection.status === "pending" ? "Cancel" : "Remove"}</button>
               </div>
             ))}
@@ -374,7 +405,8 @@ export default function ProfileSettingsModal() {
           <div className="mt-4 grid gap-2">
             {pendingRequests.map((connection) => (
               <div className="rounded-xl border-2 border-black bg-white p-3" key={connection.id}>
-                <p className="font-black capitalize">{connection.parentUsername}</p>
+                <p className="font-black">{connection.parentDisplayName}</p>
+                <p className="text-xs text-zinc-500">@{connection.parentUsername}</p>
                 <p className="text-xs text-zinc-500">Requests permission to supervise assignment progress.</p>
                 <div className="mt-3 flex gap-2">
                   <button className="flex items-center gap-1 rounded-full border-2 border-black bg-emerald-200 px-3 py-1.5 text-xs font-black disabled:opacity-60" disabled={busyId === connection.id} onClick={() => void respond(connection.id, true)} type="button"><Check className="size-4" /> Approve</button>
@@ -385,7 +417,7 @@ export default function ProfileSettingsModal() {
             {pendingRequests.length === 0 && !isLoading && <p className="rounded-xl bg-white p-3 text-sm text-zinc-500">No pending parent requests.</p>}
           </div>
           {approvedConnections.length > 0 && (
-            <div className="mt-4"><p className="text-xs font-black uppercase tracking-wider">Approved supervisors</p>{approvedConnections.map((connection) => <div className="mt-2 flex items-center justify-between rounded-xl bg-emerald-100 p-3" key={connection.id}><span className="text-sm font-bold capitalize">{connection.parentUsername}</span><button className="rounded-full border border-emerald-900 px-2 py-1 text-[10px] font-black text-emerald-900 disabled:opacity-50" disabled={busyId === connection.id} onClick={() => void removeConnection(connection.id)} type="button">Revoke access</button></div>)}</div>
+            <div className="mt-4"><p className="text-xs font-black uppercase tracking-wider">Approved supervisors</p>{approvedConnections.map((connection) => <div className="mt-2 flex items-center justify-between rounded-xl bg-emerald-100 p-3" key={connection.id}><span><strong className="block text-sm">{connection.parentDisplayName}</strong><span className="text-xs text-emerald-900/70">@{connection.parentUsername}</span></span><button className="rounded-full border border-emerald-900 px-2 py-1 text-[10px] font-black text-emerald-900 disabled:opacity-50" disabled={busyId === connection.id} onClick={() => void removeConnection(connection.id)} type="button">Revoke access</button></div>)}</div>
           )}
         </section>
       )}

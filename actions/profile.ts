@@ -19,6 +19,7 @@ type FirestoreDocument = {
 };
 
 type Profile = {
+  displayName: string;
   role: AccountRole;
   studentMode?: "independent" | "school";
   uid: string;
@@ -27,10 +28,12 @@ type Profile = {
 
 export type FamilyConnection = {
   id: string;
+  parentDisplayName: string;
   parentUid: string;
   parentUsername: string;
   status: "approved" | "pending" | "rejected";
   studentUid: string;
+  studentDisplayName: string;
   studentUsername: string;
 };
 
@@ -75,6 +78,7 @@ export type ParentAssignmentSummary = {
 
 export type ParentChildDashboard = {
   assignments: ParentAssignmentSummary[];
+  studentDisplayName: string;
   studentUid: string;
   studentUsername: string;
 };
@@ -85,6 +89,7 @@ export type NotificationAssignmentSummary = {
   dueDate: string;
   id: string;
   studentUid: string;
+  studentDisplayName: string;
   studentUsername: string;
   targetSteps: number;
   title: string;
@@ -113,7 +118,10 @@ const parseProfile = (document: FirestoreDocument): Profile | null => {
   const role = document.fields?.role?.stringValue;
   const studentModeValue = document.fields?.studentMode?.stringValue;
   if (!uid || !username || (role !== "student" && role !== "administrator" && role !== "parent")) return null;
+  const displayName =
+    document.fields?.displayName?.stringValue?.trim() || username;
   return {
+    displayName,
     role,
     studentMode:
       role === "student" && studentModeValue === "independent"
@@ -188,7 +196,16 @@ const parseConnection = (document: FirestoreDocument): FamilyConnection | null =
   const studentUsername = document.fields?.studentUsername?.stringValue;
   const status = document.fields?.status?.stringValue;
   if (!id || !parentUid || !parentUsername || !studentUid || !studentUsername || (status !== "pending" && status !== "approved" && status !== "rejected")) return null;
-  return { id, parentUid, parentUsername, status, studentUid, studentUsername };
+  return {
+    id,
+    parentDisplayName: parentUsername,
+    parentUid,
+    parentUsername,
+    status,
+    studentDisplayName: studentUsername,
+    studentUid,
+    studentUsername,
+  };
 };
 
 const parseParentEmailPreferences = (
@@ -271,7 +288,9 @@ const queryConnections = async (
       }
       return {
         ...connection,
+        parentDisplayName: parent.displayName,
         parentUsername: parent.username,
+        studentDisplayName: student.displayName,
         studentUsername: student.username,
       };
     }),
@@ -386,12 +405,13 @@ export const saveParentEmailPreferences = async (data: {
 
 type PersonalAssignmentStudent = {
   classNames: string[];
+  displayName: string;
   uid: string;
   username: string;
 };
 
 const addKnownClasses = async (
-  students: Array<{ uid: string; username: string }>,
+  students: Array<{ displayName: string; uid: string; username: string }>,
 ): Promise<PersonalAssignmentStudent[]> => {
   const apiKey = process.env.NEXT_PUBLIC_STREAM_API_KEY;
   const secret = process.env.STREAM_SECRET_KEY;
@@ -429,7 +449,7 @@ export const getAssignablePersonalStudents = async (idToken: string) => {
     if (caller.role === "student") {
       return {
         error: null,
-        students: await addKnownClasses([{ uid: caller.uid, username: caller.username }]),
+        students: await addKnownClasses([{ displayName: caller.displayName, uid: caller.uid, username: caller.username }]),
         success: true as const,
       };
     }
@@ -444,7 +464,7 @@ export const getAssignablePersonalStudents = async (idToken: string) => {
       ),
     ))
       .filter((student) => student.role === "student")
-      .map((student) => ({ uid: student.uid, username: student.username }));
+      .map((student) => ({ displayName: student.displayName, uid: student.uid, username: student.username }));
     return { error: null, students: await addKnownClasses(students), success: true as const };
   } catch (error) {
     return {
@@ -608,6 +628,7 @@ const queryAllStudentChannels = async (
 const getStudentNotificationAssignments = async (
   streamClient: StreamChat,
   studentUid: string,
+  studentDisplayName: string,
   studentUsername: string,
 ): Promise<NotificationAssignmentSummary[]> => {
   const [individual, group] = await Promise.all([
@@ -622,6 +643,7 @@ const getStudentNotificationAssignments = async (
       completedSteps: channel.data?.completed_work_days ?? 0,
       dueDate: channel.data?.due_date ?? "",
       id: channel.cid,
+      studentDisplayName,
       studentUid,
       studentUsername,
       targetSteps: channel.data?.recommended_work_days ?? 0,
@@ -645,6 +667,7 @@ export const getDashboardNotificationAssignments = async (firebaseIdToken: strin
         assignments: await getStudentNotificationAssignments(
           streamClient,
           caller.uid,
+          caller.displayName,
           caller.username,
         ),
         error: null,
@@ -659,6 +682,7 @@ export const getDashboardNotificationAssignments = async (firebaseIdToken: strin
         getStudentNotificationAssignments(
           streamClient,
           connection.studentUid,
+          connection.studentDisplayName,
           connection.studentUsername,
         ),
       ),
@@ -727,7 +751,12 @@ export const getParentDashboard = async (firebaseIdToken: string) => {
           };
         })
         .sort((first, second) => first.dueDate.localeCompare(second.dueDate));
-      return { assignments, studentUid: connection.studentUid, studentUsername: connection.studentUsername } satisfies ParentChildDashboard;
+      return {
+        assignments,
+        studentDisplayName: connection.studentDisplayName,
+        studentUid: connection.studentUid,
+        studentUsername: connection.studentUsername,
+      } satisfies ParentChildDashboard;
     }));
     return { children, error: null, success: true as const };
   } catch (error) {

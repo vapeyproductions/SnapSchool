@@ -160,10 +160,11 @@ const isStudentOverdue = (channel: StreamChannel, today = localDateString()) => 
 };
 
 const studentName = (channel: StreamChannel) =>
-  channel.data?.student_username ||
   Object.values(channel.state.members).find(
     (member) => member.user_id !== channel.data?.created_by_id,
   )?.user?.name ||
+  channel.data?.student_display_name ||
+  channel.data?.student_username ||
   "Student";
 
 const isStudentMessage = (
@@ -526,16 +527,18 @@ function LoadingDashboard() {
 
 export default function AdministratorClassDashboard({
   dashboardView,
+  displayName,
   onDashboardViewChange,
   refreshKey,
   user,
 }: {
   dashboardView: "assignments" | "calendar";
+  displayName: string;
   onDashboardViewChange: (view: "assignments" | "calendar") => void;
   refreshKey: number;
   user: User;
 }) {
-  const { client } = useGetStreamClient(user);
+  const { client } = useGetStreamClient(user, displayName);
   const [classes, setClasses] = useState<SchoolClassSummary[]>([]);
   const [channels, setChannels] = useState<StreamChannel[]>([]);
   const [selectedClassId, setSelectedClassId] = useState("");
@@ -911,7 +914,7 @@ export default function AdministratorClassDashboard({
           <div className="border-b-2 border-black px-5 py-5">
             <p className="text-xl font-black">{selectedClass?.name ?? "Assignments"}</p>
             <p className="mt-1 text-sm text-zinc-500">
-              Choose an assignment only when you need to review progress or answer a question.
+              Choose an assignment to review progress or respond to student questions.
             </p>
           </div>
           <div className="grid gap-3 p-4 lg:grid-cols-2 2xl:grid-cols-3">
@@ -1045,7 +1048,7 @@ export default function AdministratorClassDashboard({
                                 ? channel.data.due_date
                                 : update.dueDate,
                               name: channel.data?.student_username
-                                ? `${update.title} · ${channel.data.student_username}`
+                                ? `${update.title} · ${studentName(channel)}`
                                 : update.title,
                             };
                             return channel;
@@ -1335,8 +1338,8 @@ export default function AdministratorClassDashboard({
                                     {groupStudentIds.map((studentId) => {
                                       const contribution = groupContributions[studentId];
                                       const memberName =
-                                        contribution?.username ||
                                         channel.state.members[studentId]?.user?.name ||
+                                        contribution?.username ||
                                         "Student";
                                       return (
                                         <div className="flex items-center justify-between gap-2 text-xs" key={studentId}>

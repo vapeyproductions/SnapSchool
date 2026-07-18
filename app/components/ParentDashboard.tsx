@@ -214,7 +214,7 @@ export default function ParentDashboard({
               )}
               {children.map((child) => (
                 <button aria-pressed={dashboardView === "calendar" ? calendarChildUid === child.studentUid : undefined} className={`${dashboardView === "calendar" ? "rounded-full px-4 py-2 text-xs" : "rounded-2xl p-3 text-left"} border-2 border-black font-black capitalize ${(dashboardView === "calendar" ? calendarChildUid === child.studentUid : selectedChild?.studentUid === child.studentUid) ? `bg-black text-white ${dashboardView === "calendar" ? "" : "shadow-[3px_3px_0_#7b61ff]"}` : "bg-white"}`} key={child.studentUid} onClick={() => dashboardView === "calendar" ? setCalendarChildUid(child.studentUid) : setSelectedChildUid(child.studentUid)} type="button">
-                  {child.studentUsername}
+                  {child.studentDisplayName}
                   {dashboardView !== "calendar" && <span className={`mt-1 block text-xs font-medium ${selectedChild?.studentUid === child.studentUid ? "text-zinc-300" : "text-zinc-500"}`}>{child.assignments.filter((assignment) => assignment.progressPercent < 100).length} active assignments</span>}
                 </button>
               ))}
@@ -224,7 +224,7 @@ export default function ParentDashboard({
           <section className={dashboardView === "calendar" ? "min-w-0" : "min-w-0 p-4 sm:p-5"}>
             {dashboardView !== "calendar" && <div className="mb-4">
               <p className="text-2xl font-black capitalize">
-                {selectedChild?.studentUsername ?? "Student"}&apos;s assignments
+                {selectedChild?.studentDisplayName ?? "Student"}&apos;s assignments
               </p>
               <p className="text-sm text-zinc-500">Progress updates appear after the student submits evidence and the AI reviews it.</p>
             </div>}
@@ -240,11 +240,11 @@ export default function ParentDashboard({
                     dailyPlan: assignment.dailyPlan,
                     dueDate: assignment.dueDate,
                     id: `${child.studentUid}::${assignment.id}`,
-                    ownerName: child.studentUsername,
+                    ownerName: child.studentDisplayName,
                     targetSteps: assignment.targetSteps,
                     title: assignment.title,
                   })))}
-                emptyMessage={calendarChildUid === "all" ? "No connected students have active assignments scheduled." : `${calendarChildren[0]?.studentUsername ?? "This student"} has no active assignments scheduled.`}
+                emptyMessage={calendarChildUid === "all" ? "No connected students have active assignments scheduled." : `${calendarChildren[0]?.studentDisplayName ?? "This student"} has no active assignments scheduled.`}
                 onAssignmentSelect={(calendarAssignmentId) => {
                   const separator = calendarAssignmentId.indexOf("::");
                   const childUid = calendarAssignmentId.slice(0, separator);
@@ -259,7 +259,7 @@ export default function ParentDashboard({
                     });
                   }, 0);
                 }}
-                title={calendarChildUid === "all" ? "All students" : `${calendarChildren[0]?.studentUsername ?? "Student"}’s calendar`}
+                title={calendarChildUid === "all" ? "All students" : `${calendarChildren[0]?.studentDisplayName ?? "Student"}’s calendar`}
               />
             ) : (
             <div className="grid gap-3 lg:grid-cols-2">

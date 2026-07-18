@@ -44,6 +44,7 @@ declare module "stream-chat" {
     recommended_work_days?: number;
     remaining_work_summary?: string;
     student_username?: string;
+    student_display_name?: string;
     teacher_request_created_at?: string;
     teacher_request_id?: string;
     teacher_request_question?: string;

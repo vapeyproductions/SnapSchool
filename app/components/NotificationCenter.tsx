@@ -118,8 +118,8 @@ export default function NotificationCenter({
       .filter((reminder): reminder is Reminder => Boolean(reminder))
       .sort((first, second) => {
         if (first.timing !== second.timing) return first.timing === "due" ? -1 : 1;
-        return `${first.studentUsername}:${first.title}`.localeCompare(
-          `${second.studentUsername}:${second.title}`,
+        return `${first.studentDisplayName}:${first.title}`.localeCompare(
+          `${second.studentDisplayName}:${second.title}`,
         );
       }),
     [assignments, today],
@@ -191,7 +191,7 @@ export default function NotificationCenter({
                   </span>
                   <div className="min-w-0">
                     <p className="text-[10px] font-black uppercase tracking-[0.14em] text-zinc-600">
-                      {role === "parent" && <span className="capitalize">{reminder.studentUsername} · </span>}
+                      {role === "parent" && <span>{reminder.studentDisplayName} · </span>}
                       {reminder.timing === "due" ? "Due today" : "Due tomorrow"}
                     </p>
                     <h3 className="mt-1 font-black leading-5">{reminder.title}</h3>
