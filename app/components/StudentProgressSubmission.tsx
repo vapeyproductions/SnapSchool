@@ -46,26 +46,6 @@ export function StudentProgressSubmission() {
 
     setIsSubmitting(true);
     try {
-      const isImage = file.type.startsWith("image/");
-      const upload = isImage
-        ? await channel.sendImage(file, file.name, file.type)
-        : await channel.sendFile(file, file.name, file.type);
-
-      await channel.sendMessage({
-        attachments: [
-          {
-            asset_url: upload.file,
-            image_url: isImage ? upload.file : undefined,
-            mime_type: file.type,
-            title: file.name,
-            type: isImage ? "image" : "file",
-          },
-        ],
-        text: note.trim()
-          ? `Progress evidence: ${note.trim()}`
-          : "Progress evidence submitted for AI review.",
-      });
-
       const formData = new FormData();
       formData.set("channelCid", channel.cid);
       formData.set("file", file);
@@ -80,11 +60,37 @@ export function StudentProgressSubmission() {
 
       setResult(responseBody);
       const analysis = responseBody.analysis;
-      if (analysis) {
-        const reviewText = responseBody.approved
-          ? `🤖 AI progress review: Today's work is recorded. ${analysis.progressSummary} ${analysis.recommendedRemainingWorkDays} planned work day${analysis.recommendedRemainingWorkDays === 1 ? "" : "s"} remain.`
-          : `🤖 AI progress review: This submission did not complete today's goal yet. ${analysis.feedback}`;
-        await channel.sendMessage({ text: reviewText });
+      const isImage = file.type.startsWith("image/");
+      try {
+        const upload = isImage
+          ? await channel.sendImage(file, file.name, file.type)
+          : await channel.sendFile(file, file.name, file.type);
+
+        await channel.sendMessage({
+          attachments: [
+            {
+              asset_url: upload.file,
+              image_url: isImage ? upload.file : undefined,
+              mime_type: file.type,
+              title: file.name,
+              type: isImage ? "image" : "file",
+            },
+          ],
+          text: note.trim()
+            ? `Progress evidence: ${note.trim()}`
+            : "Progress evidence submitted for AI review.",
+        });
+
+        if (analysis) {
+          const reviewText = responseBody.approved
+            ? `🤖 AI progress review: Today's work is recorded. ${analysis.progressSummary} ${analysis.recommendedRemainingWorkDays} planned work day${analysis.recommendedRemainingWorkDays === 1 ? "" : "s"} remain.`
+            : `🤖 AI progress review: This submission did not complete today's goal yet. ${analysis.feedback}`;
+          await channel.sendMessage({ text: reviewText });
+        }
+      } catch {
+        setErrorMessage(
+          "The AI review completed, but the evidence image could not be added to the assignment chat. Please try uploading it again from the chat.",
+        );
       }
 
       if (responseBody.approved) {
@@ -96,8 +102,8 @@ export function StudentProgressSubmission() {
     } catch (error) {
       setErrorMessage(
         error instanceof Error
-          ? `${error.message}. Your evidence was still posted in the chat.`
-          : "Unable to review progress. Your evidence was still posted in the chat.",
+          ? error.message
+          : "Unable to review progress.",
       );
     } finally {
       setIsSubmitting(false);
@@ -182,6 +188,9 @@ export function StudentProgressSubmission() {
         <div className={`mt-2 rounded-lg px-3 py-2 text-xs ${result.approved ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-900"}`} role="status">
           <strong>{result.approved ? "Today completed." : "More evidence needed."}</strong>{" "}
           {result.analysis.feedback}
+          <span className="mt-1 block">
+            AI estimate: {result.analysis.estimatedCompletionPercent}% of the assignment is complete.
+          </span>
           {result.approved && typeof result.targetDays === "number" && (
             <span className="mt-1 block">Recalibrated assignment progress: {result.completedWorkDays} of {result.targetDays} work days.</span>
           )}

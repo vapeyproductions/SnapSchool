@@ -7,6 +7,7 @@ export type ProgressAnalysis = {
   completedWork: string[];
   confidence: ProgressConfidence;
   dueDateRisk: DueDateRisk;
+  estimatedCompletionPercent: number;
   estimatedRemainingMinutes: number;
   feedback: string;
   progressSufficient: boolean;
@@ -39,6 +40,7 @@ export const parseProgressAnalysis = (value: unknown): ProgressAnalysis => {
     typeof candidate.progressSummary !== "string" ||
     typeof candidate.remainingWorkSummary !== "string" ||
     typeof candidate.feedback !== "string" ||
+    !isIntegerBetween(candidate.estimatedCompletionPercent, 0, 100) ||
     !isIntegerBetween(candidate.estimatedRemainingMinutes, 0, 100000) ||
     !isIntegerBetween(candidate.recommendedRemainingWorkDays, 0, 60) ||
     !Array.isArray(candidate.completedWork) ||
@@ -73,6 +75,7 @@ export const parseProgressAnalysis = (value: unknown): ProgressAnalysis => {
     completedWork: candidate.completedWork,
     confidence: candidate.confidence as ProgressConfidence,
     dueDateRisk: candidate.dueDateRisk as DueDateRisk,
+    estimatedCompletionPercent: candidate.estimatedCompletionPercent as number,
     estimatedRemainingMinutes: candidate.estimatedRemainingMinutes as number,
     feedback: candidate.feedback.trim(),
     progressSufficient: candidate.progressSufficient,

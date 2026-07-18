@@ -85,6 +85,7 @@ const progressSchema = {
     completedWork: { items: { type: "string" }, type: "array" },
     confidence: { enum: ["high", "medium", "low"], type: "string" },
     dueDateRisk: { enum: ["complete", "on_track", "at_risk", "overdue"], type: "string" },
+    estimatedCompletionPercent: { maximum: 100, minimum: 0, type: "integer" },
     estimatedRemainingMinutes: { type: "integer" },
     feedback: { type: "string" },
     progressSufficient: { type: "boolean" },
@@ -108,7 +109,7 @@ const progressSchema = {
     warnings: { items: { type: "string" }, type: "array" },
   },
   required: [
-    "completedWork", "confidence", "dueDateRisk", "estimatedRemainingMinutes",
+    "completedWork", "confidence", "dueDateRisk", "estimatedCompletionPercent", "estimatedRemainingMinutes",
     "feedback", "progressSufficient", "progressSummary",
     "recommendedRemainingWorkDays", "remainingWorkSummary",
     "revisedDailyTasks", "warnings",
@@ -255,7 +256,8 @@ export async function POST(request: Request) {
         `Previously completed work days: ${completedWorkDays}.\n` +
         `Remaining plan: ${JSON.stringify(remainingTasks)}.\n` +
         `Student note: ${note || "none"}.\n\n` +
-        "Judge only work visibly supported by the uploaded evidence; do not infer hidden work and do not grade correctness. " +
+        "Read the printed and handwritten text that is visible in the uploaded evidence. For worksheets, compare visibly answered, attempted, or completed questions and sections with the total questions and sections visible in the image, and estimate an overall completion percentage. " +
+        "Judge only work visibly supported by the uploaded evidence; do not infer hidden work and do not grade correctness. If part of the worksheet is outside the photo, state that limitation in warnings and lower confidence instead of assuming it is complete. " +
         "Set progressSufficient true only when the evidence shows meaningful progress toward today's planned assignment work. " +
         "Then describe what is complete, what remains, and rebuild the remaining plan so it fits within the planning window. " +
         (isGroupAssignment
@@ -349,6 +351,7 @@ export async function POST(request: Request) {
           : {}),
         last_progress_at: new Date().toISOString(),
         last_progress_confidence: analysis.confidence,
+        estimated_completion_percent: analysis.estimatedCompletionPercent,
         last_progress_summary: analysis.progressSummary,
         recommended_work_days: newTargetDays,
         remaining_work_summary: analysis.remainingWorkSummary,

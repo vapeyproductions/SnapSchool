@@ -25,6 +25,7 @@ declare module "stream-chat" {
     created_by_id?: string;
     daily_plan?: string;
     due_date?: string;
+    estimated_completion_percent?: number;
     estimated_total_minutes?: number;
     group_administrator_ids?: string;
     group_assignment_batch_id?: string;
