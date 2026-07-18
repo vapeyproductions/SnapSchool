@@ -149,7 +149,11 @@ export default function ParentDashboard({
         if (!active) return;
         if (result.success) {
           setChildren(result.children);
-          setSelectedChildUid(result.children[0]?.studentUid || "");
+          setSelectedChildUid((current) =>
+            result.children.some((child) => child.studentUid === current)
+              ? current
+              : result.children[0]?.studentUid || "",
+          );
         } else {
           setErrorMessage(result.error ?? "Unable to load family dashboard");
         }

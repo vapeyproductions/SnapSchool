@@ -82,6 +82,19 @@ export default function CreateGroupModal({
     };
   }, [role, user]);
 
+  useEffect(() => {
+    const removeDeletedClass = (event: Event) => {
+      const deletedClassId = (event as CustomEvent<{ classId?: string }>).detail?.classId;
+      if (!deletedClassId) return;
+      setClasses((current) =>
+        current.filter((schoolClass) => schoolClass.id !== deletedClassId),
+      );
+      setClassId((current) => (current === deletedClassId ? "" : current));
+    };
+    window.addEventListener("snapschool:class-deleted", removeDeletedClass);
+    return () => window.removeEventListener("snapschool:class-deleted", removeDeletedClass);
+  }, []);
+
   const analyzeAssignment = async () => {
     setErrorMessage("");
     if (!user || role !== "administrator") {

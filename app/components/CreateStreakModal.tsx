@@ -75,6 +75,17 @@ export default function CreateStreakModal({
     };
   }, [classesLoaded, role, user]);
 
+  useEffect(() => {
+    const removeDeletedClass = (event: Event) => {
+      const classId = (event as CustomEvent<{ classId?: string }>).detail?.classId;
+      if (!classId) return;
+      setClasses((current) => current.filter((schoolClass) => schoolClass.id !== classId));
+      setClassIds((current) => current.filter((selectedId) => selectedId !== classId));
+    };
+    window.addEventListener("snapschool:class-deleted", removeDeletedClass);
+    return () => window.removeEventListener("snapschool:class-deleted", removeDeletedClass);
+  }, []);
+
   const analyzeAssignment = async () => {
     setErrorMessage("");
     if (!user || role !== "administrator") {

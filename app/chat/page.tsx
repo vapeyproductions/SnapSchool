@@ -316,7 +316,6 @@ export default function ChatPage() {
 
           <div className="p-2 sm:p-4">
             <StreakPage
-              key={`dashboard-${dashboardRefreshKey}`}
               dashboardView={dashboardView}
               refreshKey={dashboardRefreshKey}
               onDashboardViewChange={setDashboardView}

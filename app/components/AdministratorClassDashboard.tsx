@@ -159,13 +159,28 @@ const isStudentOverdue = (channel: StreamChannel, today = localDateString()) => 
   );
 };
 
-const studentName = (channel: StreamChannel) =>
-  Object.values(channel.state.members).find(
-    (member) => member.user_id !== channel.data?.created_by_id,
-  )?.user?.name ||
-  channel.data?.student_display_name ||
-  channel.data?.student_username ||
-  "Student";
+const administratorIds = (channel: StreamChannel) =>
+  new Set(
+    [
+      channel.getClient().userID,
+      channel.data?.created_by_id,
+      channel.data?.assignment_creator_id,
+      channel.data?.created_by?.id,
+      ...parseStringArray(channel.data?.group_administrator_ids),
+    ].filter((id): id is string => Boolean(id)),
+  );
+
+const studentName = (channel: StreamChannel) => {
+  const teacherIds = administratorIds(channel);
+  return (
+    Object.values(channel.state.members).find(
+      (member) => member.user_id && !teacherIds.has(member.user_id),
+    )?.user?.name ||
+    channel.data?.student_display_name ||
+    channel.data?.student_username ||
+    "Student"
+  );
+};
 
 const isStudentMessage = (
   channel: StreamChannel,
@@ -173,7 +188,7 @@ const isStudentMessage = (
 ) =>
   Boolean(
     message.user?.id &&
-      message.user.id !== channel.data?.created_by_id &&
+      !administratorIds(channel).has(message.user.id) &&
       message.text?.trim() &&
       !isRoutineProgressMessage(message),
   );
