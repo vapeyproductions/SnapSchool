@@ -116,6 +116,21 @@ service cloud.firestore {
           || resource.data.studentUid == request.auth.uid);
     }
 
+    match /parentEmailPreferences/{parentUid} {
+      allow get: if signedIn() && parentUid == request.auth.uid;
+      allow list: if false;
+      allow create, update: if signedIn()
+        && parentUid == request.auth.uid
+        && request.resource.data.parentUid == request.auth.uid
+        && request.resource.data.enabled is bool
+        && request.resource.data.mode in ['due_only', 'due_or_urgent', 'daily_summary']
+        && request.resource.data.timeZone is string
+        && request.resource.data.urgentThresholdHours is number
+        && request.resource.data.urgentThresholdHours >= 0.5
+        && request.resource.data.urgentThresholdHours <= 24;
+      allow delete: if signedIn() && parentUid == request.auth.uid;
+    }
+
     match /channels/{channelId} {
       // These documents currently contain only streak counters. Stream holds
       // the assignment messages and membership data.

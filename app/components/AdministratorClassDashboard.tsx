@@ -527,10 +527,12 @@ function LoadingDashboard() {
 export default function AdministratorClassDashboard({
   dashboardView,
   onDashboardViewChange,
+  refreshKey,
   user,
 }: {
   dashboardView: "assignments" | "calendar";
   onDashboardViewChange: (view: "assignments" | "calendar") => void;
+  refreshKey: number;
   user: User;
 }) {
   const { client } = useGetStreamClient(user);
@@ -657,7 +659,7 @@ export default function AdministratorClassDashboard({
       cancelled = true;
       subscriptions.forEach((subscription) => subscription.unsubscribe());
     };
-  }, [client, user]);
+  }, [client, refreshKey, user]);
 
   const assignments = useMemo(() => {
     const groups = new Map<string, AssignmentGroup>();

@@ -6,6 +6,8 @@ import type { AssignmentTask } from "@/lib/assignment-analysis";
 import type { AccountRole } from "@/lib/server";
 
 type FirestoreValue = {
+  booleanValue?: boolean;
+  doubleValue?: number;
   integerValue?: string;
   stringValue?: string;
   timestampValue?: string;
@@ -30,6 +32,25 @@ export type FamilyConnection = {
   status: "approved" | "pending" | "rejected";
   studentUid: string;
   studentUsername: string;
+};
+
+export type ParentEmailNotificationMode =
+  | "daily_summary"
+  | "due_only"
+  | "due_or_urgent";
+
+export type ParentEmailPreferences = {
+  enabled: boolean;
+  mode: ParentEmailNotificationMode;
+  timeZone: string;
+  urgentThresholdHours: number;
+};
+
+export const defaultParentEmailPreferences: ParentEmailPreferences = {
+  enabled: false,
+  mode: "due_only",
+  timeZone: "America/New_York",
+  urgentThresholdHours: 1.5,
 };
 
 export type ParentAssignmentSummary = {
@@ -170,6 +191,43 @@ const parseConnection = (document: FirestoreDocument): FamilyConnection | null =
   return { id, parentUid, parentUsername, status, studentUid, studentUsername };
 };
 
+const parseParentEmailPreferences = (
+  document?: FirestoreDocument,
+): ParentEmailPreferences => {
+  const mode = document?.fields?.mode?.stringValue;
+  const threshold =
+    document?.fields?.urgentThresholdHours?.doubleValue ??
+    Number(document?.fields?.urgentThresholdHours?.integerValue);
+  const timeZone = document?.fields?.timeZone?.stringValue;
+
+  return {
+    enabled: document?.fields?.enabled?.booleanValue === true,
+    mode:
+      mode === "daily_summary" ||
+      mode === "due_only" ||
+      mode === "due_or_urgent"
+        ? mode
+        : defaultParentEmailPreferences.mode,
+    timeZone: timeZone || defaultParentEmailPreferences.timeZone,
+    urgentThresholdHours:
+      Number.isFinite(threshold) && threshold >= 0.5 && threshold <= 24
+        ? threshold
+        : defaultParentEmailPreferences.urgentThresholdHours,
+  };
+};
+
+const getParentEmailPreferences = async (idToken: string, parentUid: string) => {
+  const response = await fetch(
+    documentUrl("parentEmailPreferences", parentUid),
+    { cache: "no-store", headers: authHeaders(idToken) },
+  );
+  if (response.status === 404) return defaultParentEmailPreferences;
+  if (!response.ok) throw new Error("Unable to load email notification preferences");
+  return parseParentEmailPreferences(
+    (await response.json()) as FirestoreDocument,
+  );
+};
+
 const queryConnections = async (
   idToken: string,
   fieldPath: "parentUid" | "studentUid",
@@ -228,12 +286,99 @@ export const getProfileSettings = async (idToken: string) => {
       : profile.role === "student"
         ? await queryConnections(idToken, "studentUid", profile.uid)
         : [];
-    return { connections, error: null, profile, success: true as const };
+    const emailPreferences = profile.role === "parent"
+      ? await getParentEmailPreferences(idToken, profile.uid)
+      : null;
+    return {
+      connections,
+      emailPreferences,
+      error: null,
+      profile,
+      success: true as const,
+    };
   } catch (error) {
     return {
       connections: [] as FamilyConnection[],
+      emailPreferences: null as ParentEmailPreferences | null,
       error: error instanceof Error ? error.message : "Unable to load profile settings",
       profile: null,
+      success: false as const,
+    };
+  }
+};
+
+export const saveParentEmailPreferences = async (data: {
+  enabled: boolean;
+  firebaseIdToken: string;
+  mode: ParentEmailNotificationMode;
+  timeZone: string;
+  urgentThresholdHours: number;
+}) => {
+  try {
+    const parent = await authenticate(data.firebaseIdToken);
+    if (parent.role !== "parent") {
+      throw new Error("Only parent accounts can configure family email updates");
+    }
+    if (
+      data.mode !== "daily_summary" &&
+      data.mode !== "due_only" &&
+      data.mode !== "due_or_urgent"
+    ) {
+      throw new Error("Choose a valid email notification option");
+    }
+    if (
+      !Number.isFinite(data.urgentThresholdHours) ||
+      data.urgentThresholdHours < 0.5 ||
+      data.urgentThresholdHours > 24
+    ) {
+      throw new Error("Choose an urgent-work threshold between 0.5 and 24 hours");
+    }
+    try {
+      new Intl.DateTimeFormat("en-US", { timeZone: data.timeZone }).format();
+    } catch {
+      throw new Error("Your browser reported an invalid time zone");
+    }
+
+    const response = await fetch(
+      documentUrl("parentEmailPreferences", parent.uid),
+      {
+        body: JSON.stringify({
+          fields: {
+            enabled: { booleanValue: data.enabled },
+            mode: { stringValue: data.mode },
+            parentUid: { stringValue: parent.uid },
+            timeZone: { stringValue: data.timeZone },
+            updatedAt: { timestampValue: new Date().toISOString() },
+            urgentThresholdHours: {
+              doubleValue: data.urgentThresholdHours,
+            },
+          },
+        }),
+        cache: "no-store",
+        headers: authHeaders(data.firebaseIdToken),
+        method: "PATCH",
+      },
+    );
+    if (!response.ok) {
+      throw new Error("Unable to save email notification preferences");
+    }
+    return {
+      error: null,
+      preferences: {
+        enabled: data.enabled,
+        mode: data.mode,
+        timeZone: data.timeZone,
+        urgentThresholdHours: data.urgentThresholdHours,
+      } satisfies ParentEmailPreferences,
+      success: true as const,
+    };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Unable to save email notification preferences",
+      preferences: null,
       success: false as const,
     };
   }

@@ -31,6 +31,7 @@ type StreakPageProps = {
   dashboardView: "assignments" | "calendar";
   onDashboardViewChange: (view: "assignments" | "calendar") => void;
   onDailyMinutesChange?: (minutes: number) => void;
+  refreshKey: number;
   setReminderMessage: Dispatch<SetStateAction<string>>;
   setStreakReminder: Dispatch<SetStateAction<boolean>>;
 };
@@ -192,6 +193,7 @@ function AuthenticatedStreakPage({
   dashboardView,
   onDashboardViewChange,
   onDailyMinutesChange,
+  refreshKey,
   setReminderMessage,
   setStreakReminder,
 }: StreakPageProps & { user: User }) {
@@ -262,7 +264,7 @@ function AuthenticatedStreakPage({
       deletedSubscription.unsubscribe();
       window.removeEventListener("snapschool:assignment-deleted", personalDeleted);
     };
-  }, [client, sort, user.uid]);
+  }, [client, refreshKey, sort, user.uid]);
 
   if (!client) return <LoadingStreaks />;
 
@@ -333,6 +335,7 @@ export default function StreakPage({
   dashboardView,
   onDashboardViewChange,
   onDailyMinutesChange,
+  refreshKey,
   setReminderMessage,
   setStreakReminder,
 }: StreakPageProps) {
@@ -345,6 +348,7 @@ export default function StreakPage({
       <AdministratorClassDashboard
         dashboardView={dashboardView}
         onDashboardViewChange={onDashboardViewChange}
+        refreshKey={refreshKey}
         user={user}
       />
     );
@@ -355,6 +359,7 @@ export default function StreakPage({
       <ParentDashboard
         dashboardView={dashboardView}
         onDashboardViewChange={onDashboardViewChange}
+        refreshKey={refreshKey}
         user={user}
       />
     );
@@ -366,6 +371,7 @@ export default function StreakPage({
       dashboardView={dashboardView}
       onDashboardViewChange={onDashboardViewChange}
       onDailyMinutesChange={onDailyMinutesChange}
+      refreshKey={refreshKey}
       setReminderMessage={setReminderMessage}
       setStreakReminder={setStreakReminder}
     />

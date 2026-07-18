@@ -1,7 +1,7 @@
 "use client";
 
 import type { User } from "firebase/auth";
-import { CalendarDays, CheckCircle2, Clock3, Loader2, Pencil, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
+import { CalendarDays, CheckCircle2, Clock3, Loader2, Pencil, ShieldCheck, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { getParentDashboard, type ParentAssignmentSummary, type ParentChildDashboard } from "@/actions/profile";
@@ -93,10 +93,12 @@ function ParentAssignmentEditor({
 export default function ParentDashboard({
   dashboardView,
   onDashboardViewChange,
+  refreshKey,
   user,
 }: {
   dashboardView: "assignments" | "calendar";
   onDashboardViewChange: (view: "assignments" | "calendar") => void;
+  refreshKey: number;
   user: User;
 }) {
   const [children, setChildren] = useState<ParentChildDashboard[]>([]);
@@ -159,7 +161,7 @@ export default function ParentDashboard({
         setIsLoading(false);
       });
     return () => { active = false; };
-  }, [user]);
+  }, [refreshKey, user]);
 
   useEffect(() => {
     const refreshAfterCreation = () => { void loadDashboard(); };
@@ -184,7 +186,6 @@ export default function ParentDashboard({
           <p className="flex items-center gap-2 font-black"><ShieldCheck className="size-5 text-[#7b61ff]" /> Family progress dashboard</p>
           <p className="mt-1 text-xs text-zinc-500">See approved students&apos; deadlines and progress. You can add personal work, but only students can submit streak evidence.</p>
         </div>
-        <button className="flex items-center gap-2 rounded-full border-2 border-black bg-white px-4 py-2 text-xs font-black" onClick={() => void loadDashboard()} type="button"><RefreshCw className="size-4" /> Refresh</button>
       </div>
 
       {errorMessage && <p className="m-4 rounded-2xl border-2 border-red-700 bg-red-50 p-4 text-sm font-semibold text-red-700" role="alert">{errorMessage}</p>}

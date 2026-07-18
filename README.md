@@ -13,6 +13,7 @@ SnapSchool turns assignments into manageable daily progress plans. Teachers can 
 - Lets students submit evidence of progress for AI review and plan recalibration
 - Provides assignment-specific chat between students and administrators
 - Tracks completion and highlights overdue work that needs intervention
+- Sends parent-configurable due-date, urgent-workload, or daily progress emails
 
 ## Built with
 
@@ -36,7 +37,7 @@ SnapSchool turns assignments into manageable daily progress plans. Teachers can 
    cp .env.example .env.local
    ```
 
-3. Fill in `.env.local` with credentials from your Firebase, Stream, and OpenAI projects. Never commit this file.
+3. Fill in `.env.local` with credentials from your Firebase, Stream, and OpenAI projects. Parent progress emails additionally require Firebase Admin, Resend, and `CRON_SECRET` values. Never commit this file.
 
 4. Enable Email/Password authentication and Cloud Firestore in Firebase, then deploy the included Firestore rules as appropriate for your Firebase project.
 
@@ -50,7 +51,7 @@ SnapSchool turns assignments into manageable daily progress plans. Teachers can 
 
 ## Environment variables
 
-The required variable names are documented in `.env.example`. Variables beginning with `NEXT_PUBLIC_` are included in browser code; `OPENAI_API_KEY` and `STREAM_SECRET_KEY` must remain server-only secrets.
+The required variable names are documented in `.env.example`. Variables beginning with `NEXT_PUBLIC_` are included in browser code. OpenAI, Stream, Firebase Admin, Resend, and cron secrets must remain server-only. Verify the sender domain used by `SNAPSCHOOL_EMAIL_FROM` with your email provider before enabling parent emails.
 
 ## Verification
 
@@ -58,6 +59,18 @@ The required variable names are documented in `.env.example`. Variables beginnin
 npm run lint
 npm run build
 ```
+
+## Parent progress email setup
+
+Parent email preferences are stored in Firestore and a protected Vercel Cron job checks them once each day. To activate delivery in production:
+
+1. Deploy `firestore.rules` to the Firebase project.
+2. Create a Firebase service-account credential and add its client email and private key to Vercel as `FIREBASE_CLIENT_EMAIL` and `FIREBASE_PRIVATE_KEY`.
+3. Verify a sender domain with Resend, create a sending-only API key, and set `RESEND_API_KEY` plus `SNAPSCHOOL_EMAIL_FROM` in Vercel.
+4. Add a random `CRON_SECRET` of at least 16 characters and set `NEXT_PUBLIC_APP_URL` to the production `/chat` URL.
+5. Redeploy. Vercel registers the daily schedule from `vercel.json` for production deployments.
+
+All email-related credentials are server-only. Never prefix them with `NEXT_PUBLIC_` or commit their values.
 
 ## Project status
 

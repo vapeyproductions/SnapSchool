@@ -8,6 +8,7 @@ import {
   LogOut,
   MoonStar,
   Plus,
+  RefreshCw,
   School,
   Settings,
 } from "lucide-react";
@@ -41,6 +42,7 @@ export default function ChatPage() {
   const [reminderMessage, setReminderMessage] = useState("");
   const [dailyEstimatedMinutes, setDailyEstimatedMinutes] = useState(0);
   const [dashboardView, setDashboardView] = useState<"assignments" | "calendar">("assignments");
+  const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
   const [adultMode, setAdultMode] = useState(false);
@@ -161,6 +163,15 @@ export default function ChatPage() {
             {!isAdministrator && user && role && (
               <NotificationCenter role={role} user={user} />
             )}
+            <button
+              aria-label="Refresh dashboard"
+              className="snapschool-refresh-button flex size-10 items-center justify-center rounded-full border-2 border-black bg-white transition hover:-translate-y-0.5 hover:bg-zinc-100"
+              onClick={() => setDashboardRefreshKey((current) => current + 1)}
+              title="Refresh classes and assignments"
+              type="button"
+            >
+              <RefreshCw className="size-4" />
+            </button>
             <button
               aria-label="Choose profile avatar"
               className="flex size-10 items-center justify-center overflow-hidden rounded-full border-2 border-black bg-[#c7b7ff] text-sm font-black transition hover:-translate-y-0.5"
@@ -297,6 +308,7 @@ export default function ChatPage() {
           <div className="p-2 sm:p-4">
             <StreakPage
               dashboardView={dashboardView}
+              refreshKey={dashboardRefreshKey}
               onDashboardViewChange={setDashboardView}
               onDailyMinutesChange={setDailyEstimatedMinutes}
               setReminderMessage={setReminderMessage}
