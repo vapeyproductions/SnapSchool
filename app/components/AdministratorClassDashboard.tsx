@@ -173,10 +173,10 @@ const administratorIds = (channel: StreamChannel) =>
 const studentName = (channel: StreamChannel) => {
   const teacherIds = administratorIds(channel);
   return (
+    channel.data?.student_display_name ||
     Object.values(channel.state.members).find(
       (member) => member.user_id && !teacherIds.has(member.user_id),
     )?.user?.name ||
-    channel.data?.student_display_name ||
     channel.data?.student_username ||
     "Student"
   );
@@ -666,8 +666,31 @@ export default function AdministratorClassDashboard({
         ]);
 
         if (cancelled) return;
+        const displayNameByUsername = new Map(
+          classesResult.classes.flatMap((schoolClass) =>
+            schoolClass.studentUsernames.map((username, index) => [
+              username,
+              schoolClass.studentDisplayNames?.[index] || username,
+            ] as const),
+          ),
+        );
+        const dashboardChannels = [...individualChannels, ...groupChannels].map(
+          (channel) => {
+            const username = channel.data?.student_username;
+            const currentDisplayName = username
+              ? displayNameByUsername.get(username)
+              : undefined;
+            if (currentDisplayName) {
+              channel.data = {
+                ...channel.data,
+                student_display_name: currentDisplayName,
+              };
+            }
+            return channel;
+          },
+        );
         setClasses(classesResult.classes);
-        setChannels([...individualChannels, ...groupChannels]);
+        setChannels(dashboardChannels);
         setSelectedClassId((current) => current || classesResult.classes[0]?.id || "");
       } catch (error) {
         if (!cancelled) {

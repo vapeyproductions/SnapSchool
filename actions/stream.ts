@@ -77,6 +77,7 @@ export type SchoolClassSummary = {
   id: string;
   name: string;
   studentCount: number;
+  studentDisplayNames?: string[];
   studentUsernames: string[];
 };
 
@@ -435,6 +436,7 @@ const getSchoolClass = async (
   );
   return {
     ...schoolClass,
+    studentDisplayNames: students.map((student) => student.displayName),
     studentUsernames: students.map((student) => student.username),
   };
 };
@@ -446,6 +448,7 @@ const publicClassSummary = (
   id: schoolClass.id,
   name: schoolClass.name,
   studentCount: schoolClass.studentCount,
+  studentDisplayNames: schoolClass.studentDisplayNames,
   studentUsernames: schoolClass.studentUsernames,
 });
 
@@ -523,6 +526,7 @@ export const getAdministratorClasses = async (
         );
         return {
           ...schoolClass,
+          studentDisplayNames: students.map((student) => student.displayName),
           studentUsernames: students.map((student) => student.username),
         };
       }),
@@ -656,6 +660,7 @@ export const createSchoolClass = async (data: {
         id: classId,
         name,
         studentCount: students.length,
+        studentDisplayNames: students.map((student) => student.displayName),
         studentUsernames: students.map((student) => student.username),
       } satisfies SchoolClassSummary,
       error: null,
@@ -948,6 +953,7 @@ export const updateSchoolClass = async (data: {
         id: schoolClass.id,
         name,
         studentCount: students.length,
+        studentDisplayNames: students.map((student) => student.displayName),
         studentUsernames: students.map((student) => student.username),
       } satisfies SchoolClassSummary,
       error: null,
