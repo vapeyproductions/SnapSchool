@@ -36,7 +36,7 @@ export default function CreateStreakModal({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [classId, setClassId] = useState("");
+  const [classIds, setClassIds] = useState<string[]>([]);
   const [description, setDescription] = useState("");
   const [clarification, setClarification] = useState("");
   const [dueDate, setDueDate] = useState("");
@@ -157,7 +157,7 @@ export default function CreateStreakModal({
       };
 
       const result = await createClassAssignment({
-        classId,
+        classIds,
         firebaseIdToken,
         plan,
         requestId: assignmentRequestId,
@@ -186,18 +186,48 @@ export default function CreateStreakModal({
       </DialogHeader>
 
       <form className="space-y-5" onSubmit={createAssignment}>
-        <label className="block space-y-2 text-sm font-medium">
-          <span className="flex items-center gap-2"><School className="size-4" /> Class</span>
+        <fieldset className="block space-y-2 text-sm font-medium">
+          <legend className="flex items-center gap-2"><School className="size-4" /> Classes</legend>
           {isLoadingClasses ? (
             <span className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-3 text-slate-500"><Loader2 className="size-4 animate-spin" /> Loading classes...</span>
           ) : (
-            <select className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5" disabled={!classesLoaded || classes.length === 0} onChange={(event) => setClassId(event.target.value)} required value={classId}>
-              <option value="">Select a class</option>
-              {classes.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.id}>{schoolClass.name} ({schoolClass.studentCount} students)</option>)}
-            </select>
+            <div className="max-h-52 space-y-2 overflow-y-auto rounded-xl border border-slate-300 bg-white p-3">
+              {classes.length > 1 && (
+                <button
+                  className="mb-1 text-xs font-semibold text-indigo-700 hover:underline"
+                  onClick={() => setClassIds(
+                    classIds.length === classes.length
+                      ? []
+                      : classes.map((schoolClass) => schoolClass.id),
+                  )}
+                  type="button"
+                >
+                  {classIds.length === classes.length ? "Clear all" : "Select all classes"}
+                </button>
+              )}
+              {classes.map((schoolClass) => (
+                <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg px-2 py-2 hover:bg-indigo-50" key={schoolClass.id}>
+                  <span>
+                    <span className="block font-semibold text-slate-900">{schoolClass.name}</span>
+                    <span className="block text-xs font-normal text-slate-500">{schoolClass.studentCount} students</span>
+                  </span>
+                  <input
+                    checked={classIds.includes(schoolClass.id)}
+                    className="size-4 accent-indigo-600"
+                    onChange={(event) => setClassIds((current) =>
+                      event.target.checked
+                        ? [...current, schoolClass.id]
+                        : current.filter((id) => id !== schoolClass.id),
+                    )}
+                    type="checkbox"
+                  />
+                </label>
+              ))}
+            </div>
           )}
           {classesLoaded && classes.length === 0 && <span className="block text-xs text-amber-700">Create a class and add students before assigning classwork.</span>}
-        </label>
+          {classIds.length > 0 && <span className="block text-xs text-indigo-700">One assignment will be published to {classIds.length} class{classIds.length === 1 ? "" : "es"}.</span>}
+        </fieldset>
 
         <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4 space-y-4">
           <div className="flex items-center gap-2 font-semibold text-indigo-950"><Sparkles className="size-5 text-indigo-600" /> Assignment source</div>
@@ -249,9 +279,9 @@ export default function CreateStreakModal({
 
         {errorMessage && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{errorMessage}</p>}
         {analysis && (
-          <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-60" disabled={isCreating || !analysis.inputValid || !dueDate || !title.trim() || !classId} type="submit">
+          <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700 disabled:opacity-60" disabled={isCreating || !analysis.inputValid || !dueDate || !title.trim() || classIds.length === 0} type="submit">
             {isCreating && <Loader2 className="size-4 animate-spin" />}
-            {isCreating ? "Creating assignments..." : `Publish to ${classes.find((item) => item.id === classId)?.name ?? "class"}`}
+            {isCreating ? "Creating assignments..." : `Publish to ${classIds.length} class${classIds.length === 1 ? "" : "es"}`}
           </button>
         )}
       </form>

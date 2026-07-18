@@ -278,6 +278,7 @@ export async function POST(request: Request) {
           : "The student submitted a written progress statement without a file. For reading and other tasks that do not naturally create visible evidence, accept a specific self-report when it clearly matches today's mission. For example, 'I read Chapter 1' is sufficient when Chapter 1 is today's assigned reading. Label the work as self-reported, use medium confidence unless the statement includes useful specifics, and do not demand photographic proof for inherently non-visual work. Reject only statements that are too vague, unrelated, or do not claim meaningful progress toward today's task. ") +
         "Set progressSufficient true only when the submitted update shows meaningful progress toward today's planned assignment work. " +
         "Then describe what is complete, what remains, and rebuild the remaining plan so it fits within the planning window. " +
+        "Prefer roughly 20-60 minutes per active workday. Use fewer active days rather than many tiny tasks under 20 minutes unless the remaining assignment itself is shorter, and exceed 60 minutes only when the deadline makes it unavoidable. " +
         (isGroupAssignment
           ? "For the revised group plan, use concrete team outcomes, parallel work where appropriate, and coordination or integration checkpoints. "
           : "") +

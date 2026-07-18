@@ -29,6 +29,7 @@ export type CalendarAssignment = {
   ownerName?: string;
   targetSteps: number;
   title: string;
+  workSchedule?: Array<string | null>;
 };
 
 type CalendarItem = {
@@ -114,9 +115,13 @@ const buildCalendarItems = (
     : Math.max(0, remainingTasks.length - 1);
 
   remainingTasks.forEach((task, index) => {
-    const offset = remainingTasks.length === 1
-      ? 0
-      : Math.round((index * availableSpan) / (remainingTasks.length - 1));
+    const taskIndex = assignment.completedSteps + index;
+    const scheduledDate = parseDate(assignment.workSchedule?.[taskIndex] ?? "");
+    const offset = scheduledDate
+      ? Math.max(0, Math.round((scheduledDate.getTime() - todayTime) / DAY_MS))
+      : remainingTasks.length === 1
+        ? 0
+        : Math.round((index * availableSpan) / (remainingTasks.length - 1));
     items.push({
       assignment,
       date: dateKey(addDays(today, offset)),

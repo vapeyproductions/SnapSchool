@@ -19,6 +19,7 @@ import { Channel, Chat, useChatContext } from "stream-chat-react";
 
 import AdministratorClassDashboard from "./AdministratorClassDashboard";
 import AssignmentCalendar, { type CalendarAssignment } from "./AssignmentCalendar";
+import { AssignmentScheduleProvider, useAssignmentSchedules } from "./AssignmentScheduleContext";
 import AuthContext from "./AuthContext";
 import ParentDashboard from "./ParentDashboard";
 import { ChannelContent } from "./ChannelContent";
@@ -26,6 +27,7 @@ import { PriorityAssignmentList } from "./PriorityAssignmentList";
 import { useGetStreamClient } from "./useGetStreamClient";
 import type { AssignmentTask } from "@/lib/assignment-analysis";
 import { getAssignmentPriority } from "@/lib/assignment-priority";
+import { buildBalancedAssignmentSchedules } from "@/lib/assignment-schedule";
 
 type StreakPageProps = {
   dashboardView: "assignments" | "calendar";
@@ -105,6 +107,7 @@ function StudentAssignmentCalendar({
   onOpenAssignment: () => void;
 }) {
   const { setActiveChannel } = useChatContext("StudentAssignmentCalendar");
+  const schedules = useAssignmentSchedules();
   const [calendarClassId, setCalendarClassId] = useState("all");
   const assignments = useMemo<CalendarAssignment[]>(
     () => channels
@@ -122,8 +125,9 @@ function StudentAssignmentCalendar({
         id: channel.cid,
         targetSteps: channel.data?.recommended_work_days ?? 0,
         title: channel.data?.assignment_title ?? "Assignment",
+        workSchedule: schedules[channel.cid] ?? [],
       })),
-    [channels],
+    [channels, schedules],
   );
   const classOptions = useMemo(() => {
     const options = new Map<string, string>();
@@ -207,6 +211,20 @@ function AuthenticatedStreakPage({
   };
   const options = { presence: true, state: true };
   const sort = useMemo<ChannelSort>(() => ({ last_message_at: -1 }), []);
+  const assignmentSchedules = useMemo(
+    () => buildBalancedAssignmentSchedules(
+      assignmentChannels.map((channel) => ({
+        className: channel.data?.class_name ?? "Individual",
+        completedSteps: channel.data?.completed_work_days ?? 0,
+        dailyPlan: parseDailyPlan(channel.data?.daily_plan),
+        dueDate: channel.data?.due_date,
+        id: channel.cid,
+        lastProgressAt: channel.data?.last_progress_at,
+        lateAmendment: channel.data?.late_amendment === true,
+      })),
+    ),
+    [assignmentChannels],
+  );
 
   useEffect(() => {
     if (!client) return;
@@ -270,6 +288,7 @@ function AuthenticatedStreakPage({
 
   return (
     <Chat client={client}>
+      <AssignmentScheduleProvider value={assignmentSchedules}>
       <div className="min-w-0 bg-white">
         {dashboardView === "calendar" ? (
           <StudentAssignmentCalendar
@@ -327,6 +346,7 @@ function AuthenticatedStreakPage({
       </div>
         )}
       </div>
+      </AssignmentScheduleProvider>
     </Chat>
   );
 }

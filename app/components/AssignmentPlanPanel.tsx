@@ -12,7 +12,9 @@ import { useContext, useMemo } from "react";
 import { useChannelStateContext } from "stream-chat-react";
 
 import type { AssignmentTask } from "@/lib/assignment-analysis";
+import { localDateKey } from "@/lib/assignment-schedule";
 import AuthContext from "./AuthContext";
+import { useAssignmentSchedules } from "./AssignmentScheduleContext";
 
 export function AssignmentPlanPanel({
   completedDays,
@@ -23,6 +25,7 @@ export function AssignmentPlanPanel({
 }) {
   const { role } = useContext(AuthContext);
   const { channel } = useChannelStateContext("AssignmentPlanPanel");
+  const schedules = useAssignmentSchedules();
   const tasks = useMemo(() => {
     const plan = channel.data?.daily_plan;
     if (typeof plan !== "string") return [];
@@ -51,6 +54,14 @@ export function AssignmentPlanPanel({
   );
   const nextTask = tasks[currentTaskIndex];
   const futureTasks = tasks.slice(currentTaskIndex + 1);
+  const nextTaskDate = schedules[channel.cid]?.[currentTaskIndex] ?? null;
+  const nextTaskIsToday = !nextTaskDate || nextTaskDate <= localDateKey();
+  const formatWorkDate = (value?: string | null) => value
+    ? new Date(`${value}T00:00:00`).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+      })
+    : null;
   const assignmentComplete =
     effectiveCompletedDays !== undefined &&
     typeof targetDays === "number" &&
@@ -66,12 +77,19 @@ export function AssignmentPlanPanel({
     <section className="m-4 rounded-[1.75rem] border-2 border-black bg-white p-4 text-sm shadow-[4px_4px_0_#111] sm:p-5">
       {nextTask && !assignmentComplete && (
         <div className="rounded-2xl border-2 border-black bg-[#fffc00] p-4 text-black">
-          <p className="mb-2 text-[10px] font-black uppercase tracking-[0.16em]">Today&apos;s mission</p>
+          <p className="mb-2 text-[10px] font-black uppercase tracking-[0.16em]">
+            {nextTaskIsToday ? "Today’s mission" : "Next scheduled mission"}
+          </p>
           <div className="flex flex-wrap items-center gap-2">
             <strong className="text-base">Day {nextTask.dayNumber} · {nextTask.title}</strong>
             <span className="flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-xs font-bold">
               <Clock3 className="size-3.5" /> {nextTask.estimatedMinutes} min
             </span>
+            {!nextTaskIsToday && nextTaskDate && (
+              <span className="flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-xs font-bold">
+                <CalendarDays className="size-3.5" /> Planned {formatWorkDate(nextTaskDate)}
+              </span>
+            )}
             {dueDate && (
               <span className="flex items-center gap-1 rounded-full bg-black px-2.5 py-1 text-xs font-bold text-white">
                 <CalendarDays className="size-3.5" /> {isAssessment ? "Test" : "Due"} {new Date(`${dueDate}T00:00:00`).toLocaleDateString()}
@@ -135,13 +153,24 @@ export function AssignmentPlanPanel({
           </div>
           {futureTasks.length > 0 ? (
             <ol className="mt-3 space-y-2">
-            {futureTasks.map((task) => (
+            {futureTasks.map((task, futureIndex) => {
+              const taskIndex = currentTaskIndex + futureIndex + 1;
+              const workDate = formatWorkDate(
+                schedules[channel.cid]?.[taskIndex],
+              );
+              return (
               <li className="rounded-xl border border-zinc-300 bg-[#f4f0e8] px-3 py-2" key={task.dayNumber}>
                 <strong>Day {task.dayNumber}: {task.title}</strong>
                 <span className="ml-2 text-slate-500">{task.estimatedMinutes} min</span>
+                {workDate && (
+                  <span className="ml-2 text-slate-500">
+                    · {workDate}
+                  </span>
+                )}
                 <p className="mt-1 text-slate-600">{task.description}</p>
               </li>
-            ))}
+              );
+            })}
             </ol>
           ) : (
             <p className="mt-3 rounded-xl bg-[#f4f0e8] px-3 py-2 text-xs font-medium text-zinc-600">

@@ -252,6 +252,7 @@ export async function POST(request: Request) {
         "Extract a concise title and the actual deliverables. Estimate realistic student work time. " +
         "Classify the work as essay, exam, homework, other, project, quiz, reading, or test. " +
         "Recommend 1-60 active workdays and produce exactly one manageable task for each recommended day. " +
+        "Prefer roughly 20-60 minutes per active workday. Use fewer workdays instead of creating many tiny daily tasks under 20 minutes, unless the whole assignment is shorter than 20 minutes or a dated milestone requires a short check-in. Do not exceed 60 minutes in one task unless the deadline or indivisible nature of the work makes that unavoidable. " +
         "Keep the plan concise enough for a classroom dashboard: task titles must be at most 70 characters, task descriptions at most 160 characters, the summary at most 600 characters, and the workload rationale at most 600 characters. " +
         (groupWorkerCount > 1
           ? "This is a collaborative assignment. Account for the number of workers, identify tasks that can happen in parallel, include coordination and integration checkpoints, and make each daily step a concrete shared team outcome rather than multiplying the workload by the group size. "

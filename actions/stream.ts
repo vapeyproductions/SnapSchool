@@ -958,7 +958,7 @@ export const updateSchoolClass = async (data: {
 };
 
 export const createClassAssignment = async (data: {
-  classId: string;
+  classIds: string[];
   firebaseIdToken: string;
   plan: AssignmentPlan;
   requestId: string;
@@ -978,6 +978,7 @@ export const createClassAssignment = async (data: {
     const title = data.title.trim();
     const planData = validateAssignmentPlan(data.plan);
     const requestId = data.requestId.replaceAll("-", "").toLowerCase();
+    const classIds = [...new Set(data.classIds)];
 
     if (title.length < 3 || title.length > 100) {
       return {
@@ -995,42 +996,70 @@ export const createClassAssignment = async (data: {
       };
     }
 
-    const schoolClass = await getSchoolClass(
-      data.firebaseIdToken,
-      data.classId,
-    );
-
-    if (!schoolClass.administratorIds.includes(administrator.uid)) {
+    if (
+      classIds.length === 0 ||
+      classIds.length > 20 ||
+      classIds.some((classId) => !/^[a-zA-Z0-9_-]{1,100}$/.test(classId))
+    ) {
       return {
         createdCount: 0,
-        error: "You do not have permission to assign work to this class",
+        error: "Select between 1 and 20 valid classes",
         success: false,
       };
     }
 
-    const students = await Promise.all(
-      schoolClass.studentIds.map((uid, index) =>
-        getProfileByUid(
-          data.firebaseIdToken,
-          uid,
-          schoolClass.studentUsernames[index],
+    const schoolClasses = await Promise.all(
+      classIds.map((classId) => getSchoolClass(data.firebaseIdToken, classId)),
+    );
+
+    const unauthorizedClass = schoolClasses.find(
+      (schoolClass) => !schoolClass.administratorIds.includes(administrator.uid),
+    );
+    if (unauthorizedClass) {
+      return {
+        createdCount: 0,
+        error: `You do not have permission to assign work to ${unauthorizedClass.name}`,
+        success: false,
+      };
+    }
+
+    const classRosters = await Promise.all(
+      schoolClasses.map(async (schoolClass) => ({
+        schoolClass,
+        students: await Promise.all(
+          schoolClass.studentIds.map((uid, index) =>
+            getProfileByUid(
+              data.firebaseIdToken,
+              uid,
+              schoolClass.studentUsernames[index],
+            ),
+          ),
         ),
-      ),
+      })),
     );
 
-    if (students.length === 0 || students.some((student) => student.role !== "student")) {
+    const invalidRoster = classRosters.find(
+      ({ students }) =>
+        students.length === 0 || students.some((student) => student.role !== "student"),
+    );
+    if (invalidRoster) {
       return {
         createdCount: 0,
-        error: "This class does not contain a valid student roster",
+        error: `${invalidRoster.schoolClass.name} does not contain a valid student roster`,
         success: false,
       };
     }
+
+    const uniqueStudents = new Map<string, UserProfile>();
+    classRosters.forEach(({ students }) => {
+      students.forEach((student) => uniqueStudents.set(student.uid, student));
+    });
 
     // The Firebase extension normally mirrors accounts to Stream. If its
     // installation was interrupted, valid SchoolSnap users can still be
     // missing there, so repair that state before creating their channels.
     await serverClient.upsertUsers(
-      [administrator, ...students].map((profile) => ({
+      [administrator, ...uniqueStudents.values()].map((profile) => ({
         id: profile.uid,
         name: profile.username,
       })),
@@ -1045,8 +1074,12 @@ export const createClassAssignment = async (data: {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "")
       .slice(0, 25) || "assignment";
+    const assignmentTargets = classRosters.flatMap(
+      ({ schoolClass, students }) =>
+        students.map((student) => ({ schoolClass, student })),
+    );
     const results = await Promise.allSettled(
-      students.map(async (student, index) => {
+      assignmentTargets.map(async ({ schoolClass, student }, index) => {
         const channelData = {
           ...planData,
           assignment_creator_id: administrator.uid,
@@ -1091,7 +1124,7 @@ export const createClassAssignment = async (data: {
       (result) => result.status === "fulfilled",
     ).length;
 
-    if (createdCount !== students.length) {
+    if (createdCount !== assignmentTargets.length) {
       const failureMessages = results
         .filter((result): result is PromiseRejectedResult => result.status === "rejected")
         .map((result) => result.reason instanceof Error ? result.reason.message : String(result.reason))
@@ -1100,13 +1133,18 @@ export const createClassAssignment = async (data: {
       return {
         createdCount,
         error:
-          `Created ${createdCount} of ${students.length} assignments.` +
+          `Created ${createdCount} of ${assignmentTargets.length} assignments across ${schoolClasses.length} classes.` +
           (failureDetail ? ` Stream reported: ${failureDetail.slice(0, 500)}` : " Please retry the missing assignments."),
         success: false,
       };
     }
 
-    return { createdCount, error: null, success: true };
+    return {
+      classCount: schoolClasses.length,
+      createdCount,
+      error: null,
+      success: true,
+    };
   } catch (error) {
     return {
       createdCount: 0,

@@ -11,6 +11,9 @@ import type {
 import { ChannelList, useChatContext } from "stream-chat-react";
 
 import { getAssignmentPriority } from "@/lib/assignment-priority";
+import { localDateKey } from "@/lib/assignment-schedule";
+
+import { useAssignmentSchedules } from "./AssignmentScheduleContext";
 
 type PriorityAssignmentListProps = {
   channels?: Channel[];
@@ -31,6 +34,7 @@ const urgencyStyles = {
 
 type DailyMission = {
   estimatedMinutes?: number;
+  taskIndex: number;
   title?: string;
 };
 
@@ -46,7 +50,9 @@ const getCurrentDailyMission = (channel: Channel): DailyMission | null => {
       typeof channel.data?.completed_work_days === "number"
         ? channel.data.completed_work_days
         : 0;
-    return missions[Math.min(completedDays, missions.length - 1)] ?? null;
+    const taskIndex = Math.min(completedDays, missions.length - 1);
+    const mission = missions[taskIndex];
+    return mission ? { ...mission, taskIndex } : null;
   } catch {
     return null;
   }
@@ -59,11 +65,18 @@ function DailyMinutesReporter({
   channels: Channel[];
   onDailyMinutesChange?: (minutes: number) => void;
 }) {
+  const schedules = useAssignmentSchedules();
+  const today = localDateKey();
   const totalMinutes = channels.reduce((total, channel) => {
     const priority = getAssignmentPriority(channel.data ?? {});
     if (priority.completed) return total;
 
-    const estimatedMinutes = getCurrentDailyMission(channel)?.estimatedMinutes;
+    const mission = getCurrentDailyMission(channel);
+    const scheduledDate = mission
+      ? schedules[channel.cid]?.[mission.taskIndex]
+      : null;
+    if (scheduledDate && scheduledDate > today) return total;
+    const estimatedMinutes = mission?.estimatedMinutes;
     return total +
       (typeof estimatedMinutes === "number" ? estimatedMinutes : 0);
   }, 0);
@@ -87,6 +100,8 @@ export function PriorityAssignmentList({
   const { channel: activeChannel, setActiveChannel } = useChatContext(
     "PriorityAssignmentList",
   );
+  const schedules = useAssignmentSchedules();
+  const today = localDateKey();
 
   const prioritizeChannels = useCallback(
     (channels: Channel[]) => {
@@ -96,6 +111,17 @@ export function PriorityAssignmentList({
           (channel) => !getAssignmentPriority(channel.data ?? {}).completed,
         )
         .sort((first, second) => {
+          const firstMission = getCurrentDailyMission(first);
+          const secondMission = getCurrentDailyMission(second);
+          const firstDate = firstMission
+            ? schedules[first.cid]?.[firstMission.taskIndex]
+            : null;
+          const secondDate = secondMission
+            ? schedules[second.cid]?.[secondMission.taskIndex]
+            : null;
+          const firstIsToday = !firstDate || firstDate <= today;
+          const secondIsToday = !secondDate || secondDate <= today;
+          if (firstIsToday !== secondIsToday) return firstIsToday ? -1 : 1;
           const priorityDifference =
             getAssignmentPriority(second.data ?? {}).score -
             getAssignmentPriority(first.data ?? {}).score;
@@ -105,7 +131,7 @@ export function PriorityAssignmentList({
           );
         });
     },
-    [enabled],
+    [enabled, schedules, today],
   );
 
   const renderChannels = useCallback(
@@ -118,6 +144,16 @@ export function PriorityAssignmentList({
         {channels.map((channel) => {
         const priority = getAssignmentPriority(channel.data ?? {});
         const currentMission = getCurrentDailyMission(channel);
+        const scheduledDate = currentMission
+          ? schedules[channel.cid]?.[currentMission.taskIndex]
+          : null;
+        const missionIsToday = !scheduledDate || scheduledDate <= today;
+        const scheduledLabel = scheduledDate
+          ? new Date(`${scheduledDate}T00:00:00`).toLocaleDateString(
+              undefined,
+              { month: "short", day: "numeric" },
+            )
+          : null;
         const unreadCount = channel.countUnread();
         const dueDate =
           typeof channel.data?.due_date === "string"
@@ -150,7 +186,9 @@ export function PriorityAssignmentList({
                     ? "Do next"
                     : priority.urgency === "high"
                       ? "High priority"
-                      : "On track";
+                      : !missionIsToday
+                        ? "Scheduled"
+                        : "On track";
 
         return (
           <button
@@ -178,7 +216,9 @@ export function PriorityAssignmentList({
                   <span className="mt-0.5 block truncate text-xs font-semibold text-slate-600">
                     {dailyStepDone
                       ? "Today’s goal completed"
-                      : `Today: ${currentMission.title}`}
+                      : missionIsToday
+                        ? `Today: ${currentMission.title}`
+                        : `Next: ${currentMission.title}`}
                   </span>
                 )}
               </span>
@@ -213,7 +253,7 @@ export function PriorityAssignmentList({
               <span className="flex items-center gap-1.5">
                 <Clock3 className="size-3.5 shrink-0" />
                 {typeof currentMission?.estimatedMinutes === "number"
-                  ? `${dailyStepDone ? "Next step" : "Today"} · ${currentMission.estimatedMinutes} min`
+                  ? `${dailyStepDone ? "Next step" : missionIsToday ? "Today" : scheduledLabel ?? "Next"} · ${currentMission.estimatedMinutes} min`
                   : `${priority.remainingMinutes} min remaining`}
               </span>
               {priority.streakStatus === "missed" && (
@@ -247,7 +287,9 @@ export function PriorityAssignmentList({
       enabled,
       onChannelSelected,
       onDailyMinutesChange,
+      schedules,
       setActiveChannel,
+      today,
     ],
   );
 
