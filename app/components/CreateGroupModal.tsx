@@ -178,6 +178,7 @@ export default function CreateGroupModal({
       });
       if (success) {
         setAssignmentRequestId(crypto.randomUUID());
+        window.dispatchEvent(new Event("snapschool:assignment-created"));
         return setOpen(false);
       }
       setErrorMessage(error ?? "Unable to create the group assignment");

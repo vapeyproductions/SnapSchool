@@ -634,8 +634,8 @@ export default function AdministratorClassDashboard({
     if (!client) return;
     let cancelled = false;
 
-    const loadDashboard = async () => {
-      setLoading(true);
+    const loadDashboard = async (showLoading = true) => {
+      if (showLoading) setLoading(true);
       setErrorMessage("");
 
       try {
@@ -699,19 +699,35 @@ export default function AdministratorClassDashboard({
           );
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && showLoading) setLoading(false);
       }
     };
 
     void loadDashboard();
+    const handleAssignmentCreated = () => {
+      void loadDashboard(false);
+    };
+    window.addEventListener(
+      "snapschool:assignment-created",
+      handleAssignmentCreated,
+    );
     const events = ["channel.updated", "message.new", "message.read"] as const;
     const subscriptions = events.map((eventType) =>
       client.on(eventType, () => refresh((value) => value + 1)),
     );
+    const addedToChannelSubscription = client.on(
+      "notification.added_to_channel",
+      handleAssignmentCreated,
+    );
 
     return () => {
       cancelled = true;
+      window.removeEventListener(
+        "snapschool:assignment-created",
+        handleAssignmentCreated,
+      );
       subscriptions.forEach((subscription) => subscription.unsubscribe());
+      addedToChannelSubscription.unsubscribe();
     };
   }, [client, refreshKey, user]);
 

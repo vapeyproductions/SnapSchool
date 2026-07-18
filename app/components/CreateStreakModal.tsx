@@ -176,6 +176,7 @@ export default function CreateStreakModal({
       });
       if (result.success) {
         setAssignmentRequestId(crypto.randomUUID());
+        window.dispatchEvent(new Event("snapschool:assignment-created"));
         setOpen(false);
         return;
       }
