@@ -1,7 +1,7 @@
 "use client";
 
 import type { User } from "firebase/auth";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, ClipboardList, Loader2 } from "lucide-react";
 import {
   type Dispatch,
   type SetStateAction,
@@ -43,6 +43,46 @@ function LoadingStreaks() {
         className="h-6 w-6 animate-spin text-gray-500"
       />
     </div>
+  );
+}
+
+function StudentAssignmentDetail({
+  user,
+  setReminderMessage,
+  setStreakReminder,
+}: {
+  user: User;
+  setReminderMessage: Dispatch<SetStateAction<string>>;
+  setStreakReminder: Dispatch<SetStateAction<boolean>>;
+}) {
+  const { channel } = useChatContext("StudentAssignmentDetail");
+
+  if (!channel) {
+    return (
+      <div className="flex h-full min-h-80 items-center justify-center bg-[#faf9f6] p-8 text-center">
+        <div className="max-w-sm">
+          <span className="mx-auto flex size-14 items-center justify-center rounded-full border-2 border-black bg-[#fffc00] shadow-[3px_3px_0_#111]">
+            <ClipboardList className="size-6" />
+          </span>
+          <h2 className="mt-5 text-xl font-black text-black">
+            Click an assignment for details
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-zinc-600">
+            Choose an assignment from the list to see today&apos;s mission, your plan, and progress tools.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Channel>
+      <ChannelContent
+        user={user}
+        setReminderMessage={setReminderMessage}
+        setStreakReminder={setStreakReminder}
+      />
+    </Channel>
   );
 }
 
@@ -276,13 +316,11 @@ function AuthenticatedStreakPage({
               {channelError}
             </p>
           )}
-          <Channel>
-            <ChannelContent
-              user={user}
-              setReminderMessage={setReminderMessage}
-              setStreakReminder={setStreakReminder}
-            />
-          </Channel>
+          <StudentAssignmentDetail
+            user={user}
+            setReminderMessage={setReminderMessage}
+            setStreakReminder={setStreakReminder}
+          />
         </div>
       </div>
         )}

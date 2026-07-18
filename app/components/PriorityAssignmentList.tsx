@@ -257,14 +257,11 @@ export function PriorityAssignmentList({
   );
 
   useEffect(() => {
-    if (!channels) return;
-    if (
-      prioritizedChannels.length > 0 &&
-      !prioritizedChannels.some((channel) => channel.cid === activeChannel?.cid)
-    ) {
-      setActiveChannel(prioritizedChannels[0]);
+    if (!channels || !activeChannel) return;
+    if (!prioritizedChannels.some((channel) => channel.cid === activeChannel.cid)) {
+      setActiveChannel(undefined);
     }
-  }, [activeChannel?.cid, channels, prioritizedChannels, setActiveChannel]);
+  }, [activeChannel, channels, prioritizedChannels, setActiveChannel]);
 
   if (channels) return renderChannels(prioritizedChannels);
 
