@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { StreamChat } from "stream-chat";
 
 import {
+  ASSIGNMENT_SCHEDULE_VERSION,
   balanceAssignmentTasks,
   type AssignmentTask,
 } from "@/lib/assignment-analysis";
@@ -394,6 +395,7 @@ export async function POST(request: Request) {
         last_progress_summary: analysis.progressSummary,
         recommended_work_days: newTargetDays,
         remaining_work_summary: analysis.remainingWorkSummary,
+        schedule_balance_version: ASSIGNMENT_SCHEDULE_VERSION,
       },
     });
 

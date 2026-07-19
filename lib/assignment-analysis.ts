@@ -5,6 +5,8 @@ export type AssignmentTask = {
   title: string;
 };
 
+export const ASSIGNMENT_SCHEDULE_VERSION = 2;
+
 type TaskSegment = {
   description: string;
   minutes: number;

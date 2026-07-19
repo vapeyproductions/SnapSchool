@@ -2,7 +2,13 @@
 
 import { StreamChat } from "stream-chat";
 
-import { isISODate, type AssignmentPlan } from "@/lib/assignment-analysis";
+import {
+  ASSIGNMENT_SCHEDULE_VERSION,
+  balanceAssignmentTasks,
+  isISODate,
+  type AssignmentPlan,
+  type AssignmentTask,
+} from "@/lib/assignment-analysis";
 
 const STREAM_API_KEY = process.env.NEXT_PUBLIC_STREAM_API_KEY!;
 const STREAM_API_SECRET = process.env.STREAM_SECRET_KEY!;
@@ -320,6 +326,18 @@ const generateAssignmentChannelId = (
   return `${assignmentType}-${slug}-${suffix}`;
 };
 
+const buildStorableBalancedTasks = (
+  tasks: AssignmentTask[],
+  maximumDays: number,
+) => {
+  let candidate = tasks;
+  for (const targetMinutes of [30, 40, 50, 60]) {
+    candidate = balanceAssignmentTasks(tasks, maximumDays, targetMinutes);
+    if (JSON.stringify(candidate).length <= 3400) return candidate;
+  }
+  return candidate;
+};
+
 const validateAssignmentPlan = (plan: AssignmentPlan) => {
   const today = new Date().toISOString().slice(0, 10);
 
@@ -368,7 +386,24 @@ const validateAssignmentPlan = (plan: AssignmentPlan) => {
     throw new Error("The daily assignment plan is invalid");
   }
 
-  const dailyPlan = JSON.stringify(plan.dailyTasks);
+  // Rebalance against the final due date at publication time. A teacher can
+  // change the due date after AI analysis, so the analyzed plan alone cannot
+  // be trusted to fit the actual window that students receive.
+  const dueTime = new Date(`${plan.dueDate}T00:00:00Z`).getTime();
+  const todayTime = new Date(`${today}T00:00:00Z`).getTime();
+  const availableWorkDays = Math.max(
+    1,
+    Math.floor((dueTime - todayTime) / 86_400_000),
+  );
+  const balancedTasks = buildStorableBalancedTasks(
+    plan.dailyTasks,
+    availableWorkDays,
+  );
+  const estimatedTotalMinutes = balancedTasks.reduce(
+    (total, task) => total + task.estimatedMinutes,
+    0,
+  );
+  const dailyPlan = JSON.stringify(balancedTasks);
   if (dailyPlan.length > 3400) {
     throw new Error(
       "The AI plan is too detailed to publish. Analyze it again with a clarification asking for shorter daily steps.",
@@ -380,9 +415,31 @@ const validateAssignmentPlan = (plan: AssignmentPlan) => {
     assignment_summary: plan.assignmentSummary.trim(),
     daily_plan: dailyPlan,
     due_date: plan.dueDate,
-    estimated_total_minutes: plan.estimatedTotalMinutes,
-    recommended_work_days: plan.recommendedWorkDays,
+    estimated_total_minutes: estimatedTotalMinutes,
+    recommended_work_days: balancedTasks.length,
+    schedule_balance_version: ASSIGNMENT_SCHEDULE_VERSION,
   };
+};
+
+const parseStoredAssignmentTasks = (value: unknown): AssignmentTask[] => {
+  if (typeof value !== "string") return [];
+  try {
+    const tasks = JSON.parse(value) as unknown;
+    if (!Array.isArray(tasks)) return [];
+    return tasks.filter((task): task is AssignmentTask => {
+      if (!task || typeof task !== "object") return false;
+      const candidate = task as Partial<AssignmentTask>;
+      return (
+        Number.isInteger(candidate.dayNumber) &&
+        typeof candidate.description === "string" &&
+        Number.isInteger(candidate.estimatedMinutes) &&
+        Number(candidate.estimatedMinutes) > 0 &&
+        typeof candidate.title === "string"
+      );
+    });
+  } catch {
+    return [];
+  }
 };
 
 const stringArrayFromValue = (value?: FirestoreValue): string[] =>
@@ -472,6 +529,116 @@ export async function createToken(firebaseIdToken: string): Promise<string> {
   const account = await verifyFirebaseAccount(firebaseIdToken);
   return serverClient.createToken(account.uid);
 }
+
+/**
+ * One-time migration for plans created before deterministic workload
+ * balancing was enforced at publication. It runs before the student's
+ * channels are loaded, so students and parents subsequently read the same
+ * corrected plan stored on the assignment channel.
+ */
+export const upgradeStudentAssignmentSchedules = async (
+  firebaseIdToken: string,
+): Promise<{
+  error: string | null;
+  success: boolean;
+  updatedCount: number;
+}> => {
+  try {
+    const student = await authenticateCaller(firebaseIdToken);
+    if (student.role !== "student") {
+      throw new Error("Only students can refresh their assignment schedules");
+    }
+
+    const channels: Awaited<ReturnType<typeof serverClient.queryChannels>> = [];
+    const pageSize = 30;
+    for (let offset = 0; offset < 1000; offset += pageSize) {
+      const page = await serverClient.queryChannels(
+        { members: { $in: [student.uid] } },
+        { created_at: -1 },
+        { limit: pageSize, offset, state: true, watch: false },
+      );
+      channels.push(...page);
+      if (page.length < pageSize) break;
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const todayTime = new Date(`${today}T00:00:00Z`).getTime();
+    let updatedCount = 0;
+
+    for (const channel of channels) {
+      const data = channel.data;
+      if (
+        !data?.assignment_title ||
+        data.schedule_balance_version === ASSIGNMENT_SCHEDULE_VERSION
+      ) {
+        continue;
+      }
+
+      const currentTasks = parseStoredAssignmentTasks(data.daily_plan);
+      const dueDate = typeof data.due_date === "string" ? data.due_date : "";
+      if (currentTasks.length === 0 || !isISODate(dueDate)) continue;
+
+      const completedSteps = Math.min(
+        currentTasks.length,
+        typeof data.completed_work_days === "number"
+          ? Math.max(0, Math.floor(data.completed_work_days))
+          : 0,
+      );
+      const completedTasks = currentTasks.slice(0, completedSteps);
+      const remainingTasks = currentTasks.slice(completedSteps);
+      const dueTime = new Date(`${dueDate}T00:00:00Z`).getTime();
+      const daysUntilDue = Math.floor((dueTime - todayTime) / 86_400_000);
+      const progressedToday =
+        typeof data.last_progress_at === "string" &&
+        data.last_progress_at.slice(0, 10) === today;
+      const availableDays = daysUntilDue > 0
+        ? Math.max(1, daysUntilDue - (progressedToday ? 1 : 0))
+        : daysUntilDue < 0
+          ? 7
+          : 1;
+      const balancedRemaining = buildStorableBalancedTasks(
+        remainingTasks,
+        availableDays,
+      );
+      const revisedPlan = [
+        ...completedTasks.map((task, index) => ({
+          ...task,
+          dayNumber: index + 1,
+        })),
+        ...balancedRemaining.map((task, index) => ({
+          ...task,
+          dayNumber: completedSteps + index + 1,
+        })),
+      ];
+      const serializedPlan = JSON.stringify(revisedPlan);
+      if (serializedPlan.length > 3400) continue;
+
+      await channel.updatePartial({
+        set: {
+          daily_plan: serializedPlan,
+          estimated_total_minutes: balancedRemaining.reduce(
+            (total, task) => total + task.estimatedMinutes,
+            0,
+          ),
+          recommended_work_days: revisedPlan.length,
+          schedule_balance_version: ASSIGNMENT_SCHEDULE_VERSION,
+        },
+      });
+      updatedCount += 1;
+    }
+
+    return { error: null, success: true, updatedCount };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Unable to refresh assignment schedules",
+      success: false,
+      updatedCount: 0,
+    };
+  }
+};
 
 export const getAdministratorClasses = async (
   firebaseIdToken: string,

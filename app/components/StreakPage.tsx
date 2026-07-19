@@ -17,6 +17,7 @@ import type {
 } from "stream-chat";
 import { Channel, Chat, useChatContext } from "stream-chat-react";
 
+import { upgradeStudentAssignmentSchedules } from "@/actions/stream";
 import AdministratorClassDashboard from "./AdministratorClassDashboard";
 import AssignmentCalendar, { type CalendarAssignment } from "./AssignmentCalendar";
 import { AssignmentScheduleProvider, useAssignmentSchedules } from "./AssignmentScheduleContext";
@@ -233,6 +234,23 @@ function AuthenticatedStreakPage({
 
     const loadAssignments = async () => {
       try {
+        const scheduleUpgradeKey = `snapschool:schedule-balance-v2:${user.uid}`;
+        const upgradeStatus = window.sessionStorage.getItem(scheduleUpgradeKey);
+        if (!upgradeStatus) {
+          window.sessionStorage.setItem(scheduleUpgradeKey, "running");
+          try {
+            const idToken = await user.getIdToken();
+            const result = await upgradeStudentAssignmentSchedules(idToken);
+            if (result.success) {
+              window.sessionStorage.setItem(scheduleUpgradeKey, "done");
+            } else {
+              window.sessionStorage.removeItem(scheduleUpgradeKey);
+            }
+          } catch {
+            window.sessionStorage.removeItem(scheduleUpgradeKey);
+          }
+        }
+
         const baseFilters = { members: { $in: [user.uid] } };
         const queryEveryChannel = async (type: "livestream" | "messaging") => {
           const allChannels: StreamChannel[] = [];
@@ -306,7 +324,7 @@ function AuthenticatedStreakPage({
       window.removeEventListener("snapschool:assignment-deleted", personalDeleted);
       window.removeEventListener("snapschool:class-deleted", personalClassDeleted);
     };
-  }, [client, refreshKey, sort, user.uid]);
+  }, [client, refreshKey, sort, user]);
 
   if (!client) return <LoadingStreaks />;
 

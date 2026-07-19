@@ -43,6 +43,7 @@ declare module "stream-chat" {
     original_due_date?: string;
     recommended_work_days?: number;
     remaining_work_summary?: string;
+    schedule_balance_version?: number;
     student_username?: string;
     student_display_name?: string;
     teacher_request_created_at?: string;
