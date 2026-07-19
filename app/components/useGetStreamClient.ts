@@ -6,6 +6,8 @@ import { useCreateChatClient } from "stream-chat-react";
 
 import { createToken } from "@/actions/stream";
 
+const STREAM_CLIENT_OPTIONS = { timeout: 12_000 } as const;
+
 export const useGetStreamClient = (user: User, displayName?: string) => {
   const tokenProvider = useCallback(
     async () => createToken(await user.getIdToken()),
@@ -23,6 +25,7 @@ export const useGetStreamClient = (user: User, displayName?: string) => {
 
   const client = useCreateChatClient({
     apiKey: process.env.NEXT_PUBLIC_STREAM_API_KEY!,
+    options: STREAM_CLIENT_OPTIONS,
     tokenOrProvider: tokenProvider,
     userData,
   });

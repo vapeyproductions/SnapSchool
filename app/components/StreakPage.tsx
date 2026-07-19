@@ -266,8 +266,12 @@ function AuthenticatedStreakPage({
         }
       } catch (error) {
         if (!cancelled) {
+          const message =
+            error instanceof Error ? error.message : "Unable to load assignments";
           setChannelError(
-            error instanceof Error ? error.message : "Unable to load assignments",
+            /timeout|timed out/i.test(message)
+              ? "Assignments are taking longer than expected to load. Use Refresh to try again."
+              : message,
           );
         }
       }

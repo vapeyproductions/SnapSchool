@@ -10,6 +10,7 @@ const STREAM_API_SECRET = process.env.STREAM_SECRET_KEY!;
 const serverClient = StreamChat.getInstance(
   STREAM_API_KEY,
   STREAM_API_SECRET,
+  { timeout: 12_000 },
 );
 
 type AccountRole = "student" | "administrator" | "parent";
