@@ -70,6 +70,7 @@ export function StudentProgressSubmission() {
   const [files, setFiles] = useState<File[]>([]);
   const [note, setNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [result, setResult] = useState<ProgressResult | null>(null);
 
@@ -188,7 +189,7 @@ export function StudentProgressSubmission() {
     const combinedCount = (append ? files.length : 0) + selected.length;
     if (combinedCount > MAX_PHOTOS) {
       if (!append) setFiles([]);
-      setErrorMessage(`Choose up to ${MAX_PHOTOS} photos at a time`);
+      setErrorMessage(`Choose up to ${MAX_PHOTOS} files at a time`);
       return;
     }
     const allSelectedFiles = append ? [...files, ...selected] : selected;
@@ -202,7 +203,10 @@ export function StudentProgressSubmission() {
       const newlyOptimized = await Promise.all(selected.map(optimizePhoto));
       const optimized = append ? [...files, ...newlyOptimized] : newlyOptimized;
       const totalBytes = optimized.reduce((sum, file) => sum + file.size, 0);
-      if (totalBytes > MAX_UPLOAD_BYTES) {
+      if (
+        optimized.every((file) => file.type.startsWith("image/")) &&
+        totalBytes > MAX_UPLOAD_BYTES
+      ) {
         setFiles([]);
         setErrorMessage("These photos are still too large together. Choose fewer photos or take screenshots of them.");
         return;
@@ -230,8 +234,52 @@ export function StudentProgressSubmission() {
 
       <form className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]" onSubmit={submitProgress}>
         <div className="space-y-2">
-          <div className="grid grid-cols-2 gap-2">
-            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-black bg-[#fffc00] px-3 py-3 text-xs font-black text-black transition hover:-translate-y-0.5">
+          <label
+            className={`flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-4 py-5 text-center transition ${
+              isDraggingFiles
+                ? "border-[#7b61ff] bg-[#e9e3ff] shadow-[3px_3px_0_#111]"
+                : "border-black bg-[#f4f0e8] hover:bg-[#fffbd5]"
+            }`}
+            onDragEnter={(event) => {
+              event.preventDefault();
+              setIsDraggingFiles(true);
+            }}
+            onDragLeave={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                setIsDraggingFiles(false);
+              }
+            }}
+            onDragOver={(event) => {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "copy";
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              setIsDraggingFiles(false);
+              void chooseFiles(event.dataTransfer.files);
+            }}
+          >
+            <Upload className="size-6" />
+            <span className="mt-2 text-sm font-black text-black">
+              Drag screenshots or a document here
+            </span>
+            <span className="mt-1 text-xs font-medium text-zinc-600">
+              or click to browse files
+            </span>
+            <span className="mt-2 text-[10px] font-medium text-zinc-500">
+              Up to 10 images, or one PDF, Word, or text document
+            </span>
+            <input
+              accept=".gif,.jpeg,.jpg,.pdf,.png,.txt,.webp,.doc,.docx"
+              className="sr-only"
+              multiple
+              onChange={(event) => void chooseFiles(event.target.files)}
+              ref={fileInputRef}
+              type="file"
+            />
+          </label>
+          <div className="sm:hidden">
+            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-black bg-[#fffc00] px-3 py-3 text-xs font-black text-black transition active:translate-y-0.5">
               <Camera className="size-4" />
               Take photo
               <input
@@ -243,18 +291,6 @@ export function StudentProgressSubmission() {
                   void chooseFiles(input.files, true).finally(() => { input.value = ""; });
                 }}
                 ref={cameraInputRef}
-                type="file"
-              />
-            </label>
-            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-black bg-white px-3 py-3 text-xs font-black text-black transition hover:-translate-y-0.5">
-              <Upload className="size-4" />
-              Choose file
-              <input
-                accept=".gif,.jpeg,.jpg,.pdf,.png,.txt,.webp,.doc,.docx"
-                className="sr-only"
-                multiple
-                onChange={(event) => void chooseFiles(event.target.files)}
-                ref={fileInputRef}
                 type="file"
               />
             </label>

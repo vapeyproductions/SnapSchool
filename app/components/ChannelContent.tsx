@@ -2,7 +2,7 @@
 
 import type { User } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
-import { ClipboardList, Loader2, MessageCircleQuestion, Trash2 } from "lucide-react";
+import { Check, ClipboardList, Loader2, MessageCircleQuestion, Pencil, Trash2, UsersRound, X } from "lucide-react";
 import {
   type Dispatch,
   type SetStateAction,
@@ -21,7 +21,11 @@ import {
 } from "stream-chat-react";
 
 import db from "@/lib/firebase";
-import { deletePublishedAssignment } from "@/actions/stream";
+import {
+  deletePublishedAssignment,
+  renameStudentGroup,
+  syncStudentGroupMemberNames,
+} from "@/actions/stream";
 import {
   getUsernameById,
   isSameUTCDate,
@@ -39,6 +43,19 @@ type ChannelContentProps = {
 };
 
 type AssignmentView = "messages" | "plan";
+const EMPTY_DISPLAY_NAMES: Record<string, string> = {};
+
+const parseMemberIds = (value: unknown): string[] => {
+  if (typeof value !== "string") return [];
+  try {
+    const ids = JSON.parse(value) as unknown;
+    return Array.isArray(ids)
+      ? ids.filter((id): id is string => typeof id === "string" && Boolean(id))
+      : [];
+  } catch {
+    return [];
+  }
+};
 
 export function ChannelContent({
   user,
@@ -63,6 +80,23 @@ export function ChannelContent({
   const [completedWorkDays, setCompletedWorkDays] = useState(0);
   const [syncError, setSyncError] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSavingGroupName, setIsSavingGroupName] = useState(false);
+  const [groupNameEditor, setGroupNameEditor] = useState({
+    channelCid: "",
+    draft: "",
+    error: "",
+    open: false,
+  });
+  const [localGroupName, setLocalGroupName] = useState<{
+    channelCid: string;
+    name: string;
+  } | null>(null);
+  const [syncedGroupDetails, setSyncedGroupDetails] = useState<{
+    administratorIds: string[];
+    channelCid: string;
+    namesById: Record<string, string>;
+    studentIds: string[];
+  } | null>(null);
   const completedDayRef = useRef("");
   const reminderStateRef = useRef("");
 
@@ -99,10 +133,110 @@ export function ChannelContent({
     channel.data?.assignment_kind ?? "",
   );
   const isGroupAssignment = channel.data?.assignment_type === "group";
+  const storedGroupName =
+    typeof channel.data?.group_name === "string"
+      ? channel.data.group_name
+      : "Group";
+  const groupName =
+    localGroupName?.channelCid === channel.cid
+      ? localGroupName.name
+      : storedGroupName;
+  const groupNameEditorApplies = groupNameEditor.channelCid === channel.cid;
+  const isEditingGroupName = groupNameEditorApplies && groupNameEditor.open;
+  const groupNameDraft = groupNameEditorApplies
+    ? groupNameEditor.draft
+    : groupName;
+  const groupNameError = groupNameEditorApplies ? groupNameEditor.error : "";
+  const storedGroupStudentIds = useMemo(
+    () => parseMemberIds(channel.data?.group_student_ids),
+    [channel.data?.group_student_ids],
+  );
+  const storedGroupAdministratorIds = useMemo(
+    () => parseMemberIds(channel.data?.group_administrator_ids),
+    [channel.data?.group_administrator_ids],
+  );
+  const syncedGroupDetailsApply = syncedGroupDetails?.channelCid === channel.cid;
+  const groupStudentIds = syncedGroupDetailsApply
+    ? syncedGroupDetails.studentIds
+    : storedGroupStudentIds;
+  const groupAdministratorIds = syncedGroupDetailsApply
+    ? syncedGroupDetails.administratorIds
+    : storedGroupAdministratorIds;
+  const groupDisplayNames = syncedGroupDetailsApply
+    ? syncedGroupDetails.namesById
+    : EMPTY_DISPLAY_NAMES;
+  const groupStudentNames = useMemo(
+    () =>
+      groupStudentIds.map((memberId) => {
+        const name =
+          groupDisplayNames[memberId] || members[memberId]?.user?.name || "Student";
+        return memberId === user.uid ? `${name} (you)` : name;
+      }),
+    [groupDisplayNames, groupStudentIds, members, user.uid],
+  );
+  const groupTeacherNames = useMemo(
+    () =>
+      groupAdministratorIds.map(
+        (memberId) =>
+          groupDisplayNames[memberId] || members[memberId]?.user?.name || "Teacher",
+      ),
+    [groupAdministratorIds, groupDisplayNames, members],
+  );
   const isPersonalAssignment =
     channel.data?.assignment_source === "personal" ||
     channel.data?.assignment_source === "independent";
   const canDeletePersonalAssignment = channel.data?.created_by_id === user.uid;
+
+  useEffect(() => {
+    if (role !== "student" || !isGroupAssignment) return;
+    let active = true;
+    void (async () => {
+      const result = await syncStudentGroupMemberNames({
+        channelCid: channel.cid,
+        firebaseIdToken: await user.getIdToken(),
+      });
+      if (!active || !result.success) return;
+      setSyncedGroupDetails({
+        administratorIds: result.administratorIds,
+        channelCid: channel.cid,
+        namesById: result.namesById,
+        studentIds: result.studentIds,
+      });
+    })();
+    return () => {
+      active = false;
+    };
+  }, [channel.cid, isGroupAssignment, role, user]);
+
+  const saveGroupName = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSavingGroupName(true);
+    setGroupNameEditor((current) => ({ ...current, error: "" }));
+    try {
+      const result = await renameStudentGroup({
+        channelCid: channel.cid,
+        firebaseIdToken: await user.getIdToken(),
+        groupName: groupNameDraft,
+      });
+      if (!result.success || !result.groupName) {
+        throw new Error(result.error ?? "Unable to rename the group");
+      }
+      setLocalGroupName({ channelCid: channel.cid, name: result.groupName });
+      setGroupNameEditor({
+        channelCid: channel.cid,
+        draft: result.groupName,
+        error: "",
+        open: false,
+      });
+    } catch (error) {
+      setGroupNameEditor((current) => ({
+        ...current,
+        error: error instanceof Error ? error.message : "Unable to rename the group",
+      }));
+    } finally {
+      setIsSavingGroupName(false);
+    }
+  };
 
   const deletePersonalAssignment = async () => {
     if (!window.confirm(`Delete “${assignmentTitle}”? This removes its plan and submitted progress permanently.`)) return;
@@ -319,6 +453,50 @@ export function ChannelContent({
             </div>
           </div>
         </header>
+
+        {role === "student" && isGroupAssignment && (
+          <section className="shrink-0 border-b-2 border-black bg-white px-4 py-3 text-black">
+            <div className="flex items-start gap-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-full border-2 border-black bg-[#c7b7ff]">
+                <UsersRound className="size-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-black">{groupName}</p>
+                  {!isEditingGroupName && (
+                    <button className="inline-flex items-center gap-1 rounded-full border border-black px-2 py-1 text-[10px] font-black hover:bg-[#fffc00]" onClick={() => setGroupNameEditor({ channelCid: channel.cid, draft: groupName, error: "", open: true })} type="button">
+                      <Pencil className="size-3" /> Name group
+                    </button>
+                  )}
+                </div>
+                <p className="mt-1 text-xs leading-5 text-zinc-600">
+                  <strong className="text-zinc-800">Students:</strong>{" "}
+                  {groupStudentNames.length > 0 ? groupStudentNames.join(", ") : "Group members are loading…"}
+                </p>
+                {groupTeacherNames.length > 0 && (
+                  <p className="text-xs leading-5 text-zinc-600">
+                    <strong className="text-zinc-800">Teacher{groupTeacherNames.length === 1 ? "" : "s"}:</strong>{" "}
+                    {groupTeacherNames.join(", ")}
+                  </p>
+                )}
+                {isEditingGroupName && (
+                  <form className="mt-2 flex flex-col gap-2 sm:flex-row" onSubmit={saveGroupName}>
+                    <input autoFocus className="min-w-0 flex-1 rounded-xl border-2 border-black bg-white px-3 py-2 text-sm" maxLength={40} minLength={2} onChange={(event) => setGroupNameEditor((current) => ({ ...current, draft: event.target.value }))} required value={groupNameDraft} />
+                    <div className="flex gap-2">
+                      <button aria-label="Save group name" className="inline-flex items-center gap-1 rounded-xl border-2 border-black bg-[#fffc00] px-3 py-2 text-xs font-black disabled:opacity-50" disabled={isSavingGroupName} type="submit">
+                        {isSavingGroupName ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />} Save
+                      </button>
+                      <button aria-label="Cancel renaming group" className="inline-flex items-center rounded-xl border-2 border-black bg-white px-3 py-2" disabled={isSavingGroupName} onClick={() => setGroupNameEditor({ channelCid: channel.cid, draft: groupName, error: "", open: false })} type="button">
+                        <X className="size-3.5" />
+                      </button>
+                    </div>
+                  </form>
+                )}
+                {groupNameError && <p className="mt-2 text-xs font-semibold text-red-700" role="alert">{groupNameError}</p>}
+              </div>
+            </div>
+          </section>
+        )}
 
         {view === "plan" ? (
           <div className="min-h-0 flex-1 overflow-y-auto bg-[#f4f0e8]">

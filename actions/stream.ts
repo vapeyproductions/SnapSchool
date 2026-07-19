@@ -43,6 +43,18 @@ const getAssignmentCreatorId = (data: unknown) => {
   return creatorId?.trim() ?? "";
 };
 
+const parseSerializedIds = (value: unknown): string[] => {
+  if (typeof value !== "string") return [];
+  try {
+    const ids = JSON.parse(value) as unknown;
+    return Array.isArray(ids)
+      ? ids.filter((id): id is string => typeof id === "string" && Boolean(id))
+      : [];
+  } catch {
+    return [];
+  }
+};
+
 type FirebaseAccount = {
   displayName?: string;
   localId?: string;
@@ -1503,6 +1515,12 @@ export const createClassGroupAssignment = async (data: {
     const studentsByUsername = new Map(
       students.map((student) => [student.username, student]),
     );
+    await serverClient.upsertUsers(
+      [administrator, ...additionalAdministrators, ...students].map((profile) => ({
+        id: profile.uid,
+        name: profile.displayName,
+      })),
+    );
     const batchId = requestId.slice(0, 12);
     const slug = title
       .toLowerCase()
@@ -2113,6 +2131,120 @@ export const requestTeacherForGroupAssignment = async (data: {
       requestId: null,
       requestedBy: null,
       requestedByName: null,
+      success: false,
+    };
+  }
+};
+
+export const renameStudentGroup = async (data: {
+  channelCid: string;
+  firebaseIdToken: string;
+  groupName: string;
+}) => {
+  try {
+    const student = await authenticateCaller(data.firebaseIdToken);
+    if (student.role !== "student") {
+      throw new Error("Only students can name their assignment group");
+    }
+
+    const groupName = data.groupName.trim().replace(/\s+/g, " ");
+    if (groupName.length < 2 || groupName.length > 40) {
+      throw new Error("Choose a group name between 2 and 40 characters");
+    }
+    if (!/^(messaging|livestream):[a-zA-Z0-9_-]{1,100}$/.test(data.channelCid)) {
+      throw new Error("Select a valid group assignment");
+    }
+
+    const separator = data.channelCid.indexOf(":");
+    const channel = serverClient.channel(
+      data.channelCid.slice(0, separator),
+      data.channelCid.slice(separator + 1),
+    );
+    await channel.query();
+    if (channel.data?.assignment_type !== "group") {
+      throw new Error("Group names are available only for group assignments");
+    }
+    if (!channel.state.members[student.uid]) {
+      throw new Error("You are not a member of this assignment group");
+    }
+
+    const assignmentTitle =
+      typeof channel.data.assignment_title === "string"
+        ? channel.data.assignment_title
+        : "Assignment";
+    await channel.updatePartial({
+      set: {
+        group_name: groupName,
+        name: `${assignmentTitle} · ${groupName}`,
+      },
+    });
+
+    return { error: null, groupName, success: true };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : "Unable to rename the group",
+      groupName: null,
+      success: false,
+    };
+  }
+};
+
+export const syncStudentGroupMemberNames = async (data: {
+  channelCid: string;
+  firebaseIdToken: string;
+}) => {
+  try {
+    const student = await authenticateCaller(data.firebaseIdToken);
+    if (student.role !== "student") {
+      throw new Error("Only students can load assignment group details");
+    }
+    if (!/^(messaging|livestream):[a-zA-Z0-9_-]{1,100}$/.test(data.channelCid)) {
+      throw new Error("Select a valid group assignment");
+    }
+
+    const separator = data.channelCid.indexOf(":");
+    const channel = serverClient.channel(
+      data.channelCid.slice(0, separator),
+      data.channelCid.slice(separator + 1),
+    );
+    await channel.query();
+    if (channel.data?.assignment_type !== "group") {
+      throw new Error("Group details are available only for group assignments");
+    }
+    if (!channel.state.members[student.uid]) {
+      throw new Error("You are not a member of this assignment group");
+    }
+
+    const studentIds = parseSerializedIds(channel.data.group_student_ids);
+    const administratorIds = parseSerializedIds(
+      channel.data.group_administrator_ids,
+    );
+    const profiles = await Promise.all(
+      [...new Set([...studentIds, ...administratorIds])].map((uid) =>
+        getProfileByUid(data.firebaseIdToken, uid),
+      ),
+    );
+    await serverClient.upsertUsers(
+      profiles.map((profile) => ({ id: profile.uid, name: profile.displayName })),
+    );
+    const namesById = Object.fromEntries(
+      profiles.map((profile) => [profile.uid, profile.displayName]),
+    );
+
+    return {
+      administratorIds,
+      error: null,
+      namesById,
+      studentIds,
+      success: true,
+    };
+  } catch (error) {
+    return {
+      administratorIds: [] as string[],
+      error:
+        error instanceof Error ? error.message : "Unable to load group members",
+      namesById: {} as Record<string, string>,
+      studentIds: [] as string[],
       success: false,
     };
   }
