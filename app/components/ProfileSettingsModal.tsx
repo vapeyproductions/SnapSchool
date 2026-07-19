@@ -60,29 +60,32 @@ function SettingsDisclosure({
   description,
   icon,
   title,
+  tone = "neutral",
 }: {
   children: ReactNode;
   className?: string;
   description: string;
   icon: ReactNode;
   title: string;
+  tone?: "blue" | "cream" | "peach" | "purple" | "yellow" | "neutral";
 }) {
   return (
     <details
-      className={`group overflow-hidden rounded-2xl border-2 border-black bg-white ${className ?? ""}`}
+      className={`settings-disclosure group overflow-hidden rounded-2xl border-2 border-black ${className ?? ""}`}
+      data-setting-tone={tone}
       data-settings-disclosure
     >
-      <summary className="flex cursor-pointer list-none items-center gap-3 p-4 outline-none transition hover:bg-black/5 focus-visible:ring-4 focus-visible:ring-[#7b61ff] [&::-webkit-details-marker]:hidden">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-full border-2 border-black bg-white">
+      <summary className="settings-disclosure-summary flex cursor-pointer list-none items-center gap-3 p-4 outline-none transition focus-visible:ring-4 focus-visible:ring-[#7b61ff] [&::-webkit-details-marker]:hidden">
+        <span className="settings-disclosure-icon flex size-10 shrink-0 items-center justify-center rounded-full border-2 border-black bg-white">
           {icon}
         </span>
         <span className="min-w-0 flex-1">
           <span className="block font-black">{title}</span>
-          <span className="mt-0.5 block text-xs leading-5 text-zinc-500">{description}</span>
+          <span className="settings-disclosure-description mt-0.5 block text-xs leading-5 text-zinc-600">{description}</span>
         </span>
         <ChevronDown className="size-5 shrink-0 transition-transform group-open:rotate-180" aria-hidden="true" />
       </summary>
-      <div className="border-t-2 border-black p-4">{children}</div>
+      <div className="settings-disclosure-content border-t-2 border-black p-4">{children}</div>
     </details>
   );
 }
@@ -367,10 +370,11 @@ export default function ProfileSettingsModal({ open }: { open: boolean }) {
       </DialogHeader>
 
       <SettingsDisclosure
-        className={`${role === "parent" ? "order-3" : role === "student" ? "order-2" : "order-1"} bg-[#f4f0e8]`}
+        className={role === "parent" ? "order-3" : role === "student" ? "order-2" : "order-1"}
         description={`${displayName || username} · @${username}`}
         icon={<UserRound className="size-5" />}
         title="Profile names"
+        tone="cream"
       >
         <form className="mt-4 flex flex-col gap-2 sm:flex-row" onSubmit={updateDisplayName}>
           <label className="min-w-0 flex-1">
@@ -399,6 +403,7 @@ export default function ProfileSettingsModal({ open }: { open: boolean }) {
         description="Change your email address or password"
         icon={<KeyRound className="size-5" />}
         title="Sign-in & security"
+        tone="blue"
       >
         <form className="mt-4 space-y-3 rounded-xl border border-zinc-200 bg-[#f4f0e8] p-3" onSubmit={updateSignInEmail}>
           <div>
@@ -425,6 +430,7 @@ export default function ProfileSettingsModal({ open }: { open: boolean }) {
         description="Choose or change your profile character"
         icon={<Sparkles className="size-5" />}
         title="Profile avatar"
+        tone="peach"
       >
         <div className="mt-4 grid grid-cols-4 gap-2 sm:grid-cols-5">
           {avatarChoices.map((avatar) => {
@@ -461,10 +467,11 @@ export default function ProfileSettingsModal({ open }: { open: boolean }) {
 
       {role === "parent" && (
         <SettingsDisclosure
-          className="order-2 bg-[#fffbd5]"
+          className="order-2"
           description={`Choose progress updates sent to ${user?.email ?? "your email"}`}
           icon={<Mail className="size-5" />}
           title="Student progress emails"
+          tone="yellow"
         >
           <form className="mt-4 space-y-3" onSubmit={updateEmailPreferences}>
             <label className="flex items-center justify-between gap-3 rounded-xl border-2 border-black bg-white p-3">
@@ -526,10 +533,11 @@ export default function ProfileSettingsModal({ open }: { open: boolean }) {
 
       {role === "parent" && (
         <SettingsDisclosure
-          className="order-1 bg-[#c7b7ff]"
+          className="order-1"
           description="Request access or manage connected students"
           icon={<UserRoundPlus className="size-5" />}
           title="Connect to a student"
+          tone="purple"
         >
           <p className="text-xs leading-5 text-zinc-700">Enter your child&apos;s exact username. They must approve the request before any assignment progress becomes visible.</p>
           <form className="mt-3 flex flex-col gap-2 sm:flex-row" onSubmit={requestStudent}>
@@ -552,10 +560,11 @@ export default function ProfileSettingsModal({ open }: { open: boolean }) {
 
       {role === "student" && (
         <SettingsDisclosure
-          className="order-1 bg-[#fffbd5]"
+          className="order-1"
           description={pendingRequests.length > 0 ? `${pendingRequests.length} request${pendingRequests.length === 1 ? "" : "s"} waiting` : "Approve or manage parent access"}
           icon={<ShieldCheck className="size-5" />}
           title="Parent supervision"
+          tone="yellow"
         >
           <p className="text-xs leading-5 text-zinc-600">Only approve a parent or guardian you recognize. Approval gives them read-only access to your assignment progress.</p>
           <div className="mt-4 grid gap-2">

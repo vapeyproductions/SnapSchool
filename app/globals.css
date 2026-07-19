@@ -230,6 +230,44 @@
   outline-offset: 2px;
 }
 
+/* Profile settings use their own palette so accordion headers remain distinct. */
+.settings-disclosure {
+  background: #fff;
+  color: #171717;
+}
+
+.settings-disclosure-summary {
+  background: #fff;
+}
+
+.settings-disclosure[data-setting-tone="cream"] > .settings-disclosure-summary {
+  background: #f4f0e8;
+}
+
+.settings-disclosure[data-setting-tone="blue"] > .settings-disclosure-summary {
+  background: #dff2ff;
+}
+
+.settings-disclosure[data-setting-tone="peach"] > .settings-disclosure-summary {
+  background: #ffe0d5;
+}
+
+.settings-disclosure[data-setting-tone="purple"] > .settings-disclosure-summary {
+  background: #c7b7ff;
+}
+
+.settings-disclosure[data-setting-tone="yellow"] > .settings-disclosure-summary {
+  background: #fffbd5;
+}
+
+.settings-disclosure-summary:hover {
+  filter: brightness(.97);
+}
+
+.settings-disclosure-content {
+  background: #fff;
+}
+
 /* Optional calmer presentation for parent and teacher accounts. */
 html.adult-mode-enabled body,
 .adult-mode {
@@ -425,6 +463,61 @@ html.adult-mode-enabled [data-slot="dialog-content"] {
   color: #243244;
   border-radius: .6rem !important;
   box-shadow: 0 18px 45px rgb(15 23 42 / 18%);
+}
+
+/* Settings stay light and readable in Adult Mode instead of inheriting the
+   dashboard's stronger navy substitutions. */
+html.adult-mode-enabled .settings-disclosure {
+  border-color: #c7d3de !important;
+  background: #fff !important;
+  color: #1f3344 !important;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 7%);
+}
+
+html.adult-mode-enabled .settings-disclosure-summary {
+  background: #edf3f7 !important;
+  color: #1f3344 !important;
+}
+
+html.adult-mode-enabled
+  .settings-disclosure[data-setting-tone="purple"]
+  > .settings-disclosure-summary,
+html.adult-mode-enabled
+  .settings-disclosure[data-setting-tone="peach"]
+  > .settings-disclosure-summary {
+  background: #eef1f6 !important;
+}
+
+html.adult-mode-enabled
+  .settings-disclosure[data-setting-tone="yellow"]
+  > .settings-disclosure-summary,
+html.adult-mode-enabled
+  .settings-disclosure[data-setting-tone="cream"]
+  > .settings-disclosure-summary {
+  background: #f4f3ed !important;
+}
+
+html.adult-mode-enabled .settings-disclosure-description {
+  color: #566979 !important;
+}
+
+html.adult-mode-enabled .settings-disclosure-icon {
+  border-color: #b8c8d5 !important;
+  background: #fff !important;
+  color: #315b78 !important;
+}
+
+html.adult-mode-enabled .settings-disclosure-content {
+  border-color: #d7e0e7 !important;
+  background: #fff !important;
+  color: #263746 !important;
+}
+
+html.adult-mode-enabled .settings-disclosure input,
+html.adult-mode-enabled .settings-disclosure textarea,
+html.adult-mode-enabled .settings-disclosure select {
+  background: #fff !important;
+  color: #1f2937 !important;
 }
 
 @media (max-width: 767px) {
