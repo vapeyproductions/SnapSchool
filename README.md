@@ -87,11 +87,11 @@ The responsive interface makes it practical to photograph work from a phone whil
 
 The repository does not contain passwords. Replace the placeholders below with dedicated, non-personal hackathon accounts immediately before submission, or provide the same credentials in Devpost's private judging instructions.
 
-| Role | Email | Password | Prepared state |
+| Role | Email | Prepared state |
 | --- | --- | --- | --- |
-| Student | `<snapschooldemo.student@gmail.com>` | `<snapschooldemo.student>` | Member of the demo class with active assignments |
-| Teacher | `<snapschooldemo.teacher@gmail.com>` | `<snapschooldemo.teacher>` | Owns the demo class and assignments |
-| Parent | `<eva.moughan@gmail.com>` | `<snapschooldemo.parent>` | Already approved by the demo student |
+| Student | `<snapschooldemo.student@gmail.com>` | Member of the demo class with active assignments |
+| Teacher | `<snapschooldemo.teacher@gmail.com>` | Owns the demo class and assignments |
+| Parent | `<eva.moughan@gmail.com>` | Already approved by the demo student |
 
 Use synthetic names and homework in these accounts. Never publish credentials for personal accounts or accounts containing real student information.
 
