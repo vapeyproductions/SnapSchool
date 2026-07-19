@@ -5,6 +5,104 @@ export type AssignmentTask = {
   title: string;
 };
 
+type TaskSegment = {
+  description: string;
+  minutes: number;
+  sourceIndex: number;
+  title: string;
+};
+
+/**
+ * Rebuilds uneven AI tasks into sequential, nearly equal work sessions. This
+ * keeps one mission per active day and preserves the full estimated workload
+ * instead of truncating tasks when fewer pre-deadline days remain.
+ */
+export const balanceAssignmentTasks = (
+  tasks: AssignmentTask[],
+  maximumDays: number,
+  targetMinutesPerDay = 30,
+): AssignmentTask[] => {
+  if (tasks.length === 0) return [];
+  const safeMaximumDays = Math.max(1, Math.min(60, Math.floor(maximumDays)));
+  const totalMinutes = tasks.reduce(
+    (total, task) => total + Math.max(1, Math.round(task.estimatedMinutes)),
+    0,
+  );
+  const desiredDays = Math.min(
+    safeMaximumDays,
+    Math.max(
+      1,
+      Math.min(tasks.length, safeMaximumDays),
+      Math.ceil(totalMinutes / Math.max(20, targetMinutesPerDay)),
+    ),
+  );
+  const taskMinutes = tasks.map((task) => Math.max(1, Math.round(task.estimatedMinutes)));
+  const largestTask = Math.max(...taskMinutes);
+  const smallestTask = Math.min(...taskMinutes);
+  const idealMinutes = Math.ceil(totalMinutes / desiredDays);
+  const alreadyBalanced =
+    desiredDays === tasks.length &&
+    largestTask <= Math.max(60, idealMinutes + 15) &&
+    largestTask - smallestTask <= 30;
+
+  if (alreadyBalanced) {
+    return tasks.map((task, index) => ({ ...task, dayNumber: index + 1 }));
+  }
+
+  const targets = Array.from({ length: desiredDays }, (_, index) =>
+    Math.floor(totalMinutes / desiredDays) +
+    (index < totalMinutes % desiredDays ? 1 : 0),
+  );
+  const sourceRemaining = [...taskMinutes];
+  const sourcePartNumbers = Array.from({ length: tasks.length }, () => 0);
+  let sourceIndex = 0;
+
+  return targets.map((targetMinutes, dayIndex) => {
+    const segments: TaskSegment[] = [];
+    let minutesNeeded = targetMinutes;
+
+    while (minutesNeeded > 0 && sourceIndex < tasks.length) {
+      const minutes = Math.min(minutesNeeded, sourceRemaining[sourceIndex]);
+      sourcePartNumbers[sourceIndex] += 1;
+      segments.push({
+        description: tasks[sourceIndex].description,
+        minutes,
+        sourceIndex,
+        title: tasks[sourceIndex].title,
+      });
+      sourceRemaining[sourceIndex] -= minutes;
+      minutesNeeded -= minutes;
+      if (sourceRemaining[sourceIndex] === 0) sourceIndex += 1;
+    }
+
+    const firstSegment = segments[0];
+    const uniqueTitles = [...new Set(segments.map((segment) => segment.title))];
+    const splitSingleTask =
+      segments.length === 1 &&
+      taskMinutes[firstSegment.sourceIndex] !== firstSegment.minutes;
+    const title = uniqueTitles.length === 1
+      ? splitSingleTask
+        ? `${uniqueTitles[0]} · Part ${sourcePartNumbers[firstSegment.sourceIndex]}`
+        : uniqueTitles[0]
+      : `${uniqueTitles[0]} + ${uniqueTitles[uniqueTitles.length - 1]}`;
+    const description = segments
+      .map((segment) =>
+        segment.minutes === taskMinutes[segment.sourceIndex]
+          ? segment.description
+          : `${segment.minutes} min: ${segment.description}`,
+      )
+      .join(" Then, ")
+      .slice(0, 160);
+
+    return {
+      dayNumber: dayIndex + 1,
+      description,
+      estimatedMinutes: targetMinutes,
+      title: title.slice(0, 70),
+    };
+  });
+};
+
 export type AssignmentKind =
   | "essay"
   | "exam"

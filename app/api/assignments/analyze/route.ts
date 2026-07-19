@@ -2,7 +2,10 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
-import { parseAssignmentAnalysis } from "@/lib/assignment-analysis";
+import {
+  balanceAssignmentTasks,
+  parseAssignmentAnalysis,
+} from "@/lib/assignment-analysis";
 
 export const runtime = "nodejs";
 
@@ -263,7 +266,7 @@ export async function POST(request: Request) {
         "Extract a concise title and the actual deliverables. Estimate realistic student work time. " +
         "Classify the work as essay, exam, homework, other, project, quiz, reading, or test. " +
         "Recommend 1-60 active workdays and produce exactly one manageable task for each recommended day. " +
-        "Prefer roughly 20-60 minutes per active workday. Use fewer workdays instead of creating many tiny daily tasks under 20 minutes, unless the whole assignment is shorter than 20 minutes or a dated milestone requires a short check-in. Do not exceed 60 minutes in one task unless the deadline or indivisible nature of the work makes that unavoidable. " +
+        "Disperse work across as many reasonable pre-deadline days as possible and minimize the highest daily workload. Aim for roughly 20-40 minutes per active day when time permits, with daily estimates as even as possible. Never leave a light earlier day followed by a multi-hour final workday when that work could be divided. Keep missions from this assignment on separate days. Do not exceed 60 minutes in one task unless total remaining work divided by available days makes that mathematically unavoidable. " +
         "Keep the plan concise enough for a classroom dashboard: task titles must be at most 70 characters, task descriptions at most 160 characters, the summary at most 600 characters, and the workload rationale at most 600 characters. " +
         (groupWorkerCount > 1
           ? "This is a collaborative assignment. Account for the number of workers, identify tasks that can happen in parallel, include coordination and integration checkpoints, and make each daily step a concrete shared team outcome rather than multiplying the workload by the group size. "
@@ -323,7 +326,37 @@ export async function POST(request: Request) {
     if (!outputContent?.text) throw new Error("OpenAI returned no assignment analysis");
 
     try {
-      return Response.json({ analysis: parseAssignmentAnalysis(JSON.parse(outputContent.text)) });
+      const analysis = parseAssignmentAnalysis(JSON.parse(outputContent.text));
+      const today = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00Z`);
+      const planningDueDate = teacherDueDate || analysis.detectedDueDate;
+      const taskMinutes = analysis.dailyTasks.reduce(
+        (total, task) => total + task.estimatedMinutes,
+        0,
+      );
+      const maximumDays = planningDueDate
+        ? Math.max(
+            1,
+            Math.floor(
+              (new Date(`${planningDueDate}T00:00:00Z`).getTime() - today.getTime()) /
+                86_400_000,
+            ),
+          )
+        : Math.min(
+            60,
+            Math.max(analysis.recommendedWorkDays, Math.ceil(taskMinutes / 30)),
+          );
+      const dailyTasks = balanceAssignmentTasks(
+        analysis.dailyTasks,
+        maximumDays,
+      );
+      return Response.json({
+        analysis: {
+          ...analysis,
+          dailyTasks,
+          estimatedTotalMinutes: taskMinutes,
+          recommendedWorkDays: dailyTasks.length,
+        },
+      });
     } catch (error) {
       if (error instanceof SyntaxError) {
         throw new Error("The AI response ended before the assignment plan was complete. Please analyze it again.");

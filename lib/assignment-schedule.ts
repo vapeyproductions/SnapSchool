@@ -161,7 +161,7 @@ export const buildBalancedAssignmentSchedules = (
         ? assignment.scheduleStartOffset + Math.floor((span - 1) / 2)
         : assignment.scheduleStartOffset +
           Math.round((remainingIndex * (span - 1)) / (remainingCount - 1));
-      const idealOffset = assignment.urgent ? earliestOffset : evenOffset;
+      const idealOffset = evenOffset;
       let chosenOffset = earliestOffset;
       let chosenScore = Number.POSITIVE_INFINITY;
 
@@ -178,9 +178,9 @@ export const buildBalancedAssignmentSchedules = (
           aboveComfortRange * 10_000 +
           belowComfortRange * 18 +
           projectedMinutes +
-          Math.abs(offset - idealOffset) * (assignment.urgent ? 80 : 12) +
+          Math.abs(offset - idealOffset) * (assignment.urgent ? 45 : 18) +
           (sameClass ? (assignment.urgent ? 40 : 1_200) : 0) +
-          (assignment.urgent ? offset * 120 : 0);
+          (assignment.urgent ? offset * 15 : 0);
 
         if (score < chosenScore) {
           chosenOffset = offset;

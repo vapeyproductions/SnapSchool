@@ -3,7 +3,10 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { StreamChat } from "stream-chat";
 
-import type { AssignmentTask } from "@/lib/assignment-analysis";
+import {
+  balanceAssignmentTasks,
+  type AssignmentTask,
+} from "@/lib/assignment-analysis";
 import { parseProgressAnalysis } from "@/lib/progress-analysis";
 
 export const runtime = "nodejs";
@@ -284,7 +287,7 @@ export async function POST(request: Request) {
           : "The student submitted a written progress statement without a file. For reading and other tasks that do not naturally create visible evidence, accept a specific self-report when it clearly matches today's mission. For example, 'I read Chapter 1' is sufficient when Chapter 1 is today's assigned reading. Label the work as self-reported, use medium confidence unless the statement includes useful specifics, and do not demand photographic proof for inherently non-visual work. Reject only statements that are too vague, unrelated, or do not claim meaningful progress toward today's task. ") +
         "Set progressSufficient true only when the submitted update shows meaningful progress toward today's planned assignment work. " +
         "Then describe what is complete, what remains, and rebuild the remaining plan so it fits within the planning window. For work that is not already overdue, the final planned task must be completed no later than the day before the due date. " +
-        "Prefer roughly 20-60 minutes per active workday. Use fewer active days rather than many tiny tasks under 20 minutes unless the remaining assignment itself is shorter, and exceed 60 minutes only when the deadline makes it unavoidable. " +
+        "Disperse remaining work across separate future days and minimize the highest daily workload. Aim for roughly 20-40 minutes per active day when possible, keep estimates even, and never create a light day followed by a multi-hour final day if that work can be divided. Use only one mission from this assignment per day. Exceed 60 minutes only when total remaining work divided by the available days makes that unavoidable. " +
         (isGroupAssignment
           ? "For the revised group plan, use concrete team outcomes, parallel work where appropriate, and coordination or integration checkpoints. "
           : "") +
@@ -324,17 +327,26 @@ export async function POST(request: Request) {
 
     const analysis = parseProgressAnalysis(JSON.parse(output.text));
     const approved = analysis.progressSufficient && analysis.confidence !== "low";
-    const cappedRemainingDays = Math.min(
-      analysis.recommendedRemainingWorkDays,
-      planningWindowDays,
-    );
-    const revisedRemainingTasks = analysis.revisedDailyTasks
-      .slice(0, cappedRemainingDays)
-      .map((task, index) => ({ ...task, dayNumber: completedWorkDays + (approved && lastProgressDate !== today ? 1 : 0) + index + 1 }));
 
     if (!approved) {
       return Response.json({ approved: false, analysis });
     }
+
+    const remainingPlanningDays = Math.max(
+      1,
+      planningWindowDays - 1,
+    );
+    const revisedRemainingTasks = balanceAssignmentTasks(
+      analysis.revisedDailyTasks,
+      remainingPlanningDays,
+    ).map((task, index) => ({
+      ...task,
+      dayNumber:
+        completedWorkDays +
+        (lastProgressDate !== today ? 1 : 0) +
+        index +
+        1,
+    }));
 
     const countsToday = lastProgressDate === today;
     const newCompletedWorkDays = completedWorkDays + (countsToday ? 0 : 1);
