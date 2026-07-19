@@ -199,7 +199,7 @@ export default function ChatPage() {
               <DialogTrigger render={<button aria-label="Profile settings" className="flex size-10 items-center justify-center rounded-full border-2 border-black bg-white transition hover:-translate-y-0.5" type="button" />}>
                 <Settings className="size-4" />
               </DialogTrigger>
-              <ProfileSettingsModal />
+              <ProfileSettingsModal open={openProfileSettings} />
             </Dialog>
             <button
               aria-label={isLoggingOut ? "Logging out" : "Log out"}

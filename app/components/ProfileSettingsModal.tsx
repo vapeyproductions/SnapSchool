@@ -1,7 +1,7 @@
 "use client";
 
 import { BellRing, Check, Clock3, Loader2, Mail, ShieldCheck, Sparkles, UserRoundPlus, X } from "lucide-react";
-import { useContext, useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   getProfileSettings,
@@ -25,8 +25,9 @@ const defaultParentEmailPreferences: ParentEmailPreferences = {
   urgentThresholdHours: 1.5,
 };
 
-export default function ProfileSettingsModal() {
+export default function ProfileSettingsModal({ open }: { open: boolean }) {
   const { displayName, role, user, username } = useContext(AuthContext);
+  const contentRef = useRef<HTMLDivElement>(null);
   const [connections, setConnections] = useState<FamilyConnection[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [busyId, setBusyId] = useState("");
@@ -39,6 +40,14 @@ export default function ProfileSettingsModal() {
     [],
   );
   const [selectedAvatar, setSelectedAvatar] = useState(user?.photoURL ?? "");
+
+  useEffect(() => {
+    if (!open) return;
+    const frame = window.requestAnimationFrame(() => {
+      contentRef.current?.scrollTo({ behavior: "auto", top: 0 });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [open]);
 
   const loadSettings = async () => {
     if (!user) return;
@@ -217,7 +226,7 @@ export default function ProfileSettingsModal() {
   const approvedConnections = connections.filter((connection) => connection.status === "approved");
 
   return (
-    <DialogContent className="max-h-[90vh] overflow-y-auto rounded-[2rem] border-2 border-black sm:max-w-2xl">
+    <DialogContent ref={contentRef} className="max-h-[90vh] overflow-y-auto rounded-[2rem] border-2 border-black sm:max-w-2xl">
       <DialogHeader>
         <DialogTitle>Profile settings</DialogTitle>
         <DialogDescription>
