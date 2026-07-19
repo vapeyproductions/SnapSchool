@@ -95,6 +95,15 @@ export default function CreateGroupModal({
   }, [role, user]);
 
   useEffect(() => {
+    const upsertClass = (event: Event) => {
+      const classRecord = (event as CustomEvent<SchoolClassSummary>).detail;
+      if (!classRecord?.id) return;
+      setClasses((current) =>
+        [...current.filter((schoolClass) => schoolClass.id !== classRecord.id), classRecord]
+          .sort((first, second) => first.name.localeCompare(second.name)),
+      );
+      setClassId((current) => current || classRecord.id);
+    };
     const removeDeletedClass = (event: Event) => {
       const deletedClassId = (event as CustomEvent<{ classId?: string }>).detail?.classId;
       if (!deletedClassId) return;
@@ -103,8 +112,14 @@ export default function CreateGroupModal({
       );
       setClassId((current) => (current === deletedClassId ? "" : current));
     };
+    window.addEventListener("snapschool:class-created", upsertClass);
+    window.addEventListener("snapschool:class-updated", upsertClass);
     window.addEventListener("snapschool:class-deleted", removeDeletedClass);
-    return () => window.removeEventListener("snapschool:class-deleted", removeDeletedClass);
+    return () => {
+      window.removeEventListener("snapschool:class-created", upsertClass);
+      window.removeEventListener("snapschool:class-updated", upsertClass);
+      window.removeEventListener("snapschool:class-deleted", removeDeletedClass);
+    };
   }, []);
 
   const analyzeAssignment = async () => {

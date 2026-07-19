@@ -590,10 +590,10 @@ export default function AdministratorClassDashboard({
       if (!classRecord?.id) return;
 
       setClasses((current) =>
-        current
-          .map((schoolClass) =>
-            schoolClass.id === classRecord.id ? classRecord : schoolClass,
-          )
+        [
+          ...current.filter((schoolClass) => schoolClass.id !== classRecord.id),
+          classRecord,
+        ]
           .sort((first, second) => first.name.localeCompare(second.name)),
       );
       setChannels((current) =>
@@ -619,9 +619,11 @@ export default function AdministratorClassDashboard({
       setSelectedAssignmentKey("");
     };
 
+    window.addEventListener("snapschool:class-created", handleClassUpdated);
     window.addEventListener("snapschool:class-updated", handleClassUpdated);
     window.addEventListener("snapschool:class-deleted", handleClassDeleted);
     return () => {
+      window.removeEventListener("snapschool:class-created", handleClassUpdated);
       window.removeEventListener("snapschool:class-updated", handleClassUpdated);
       window.removeEventListener("snapschool:class-deleted", handleClassDeleted);
     };

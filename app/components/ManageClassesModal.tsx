@@ -111,6 +111,9 @@ export default function ManageClassesModal() {
         ),
       );
       setSuccessMessage(`${classRecord.name} is ready for assignments.`);
+      window.dispatchEvent(
+        new CustomEvent("snapschool:class-created", { detail: classRecord }),
+      );
       form.reset();
     } catch (error) {
       setErrorMessage(
