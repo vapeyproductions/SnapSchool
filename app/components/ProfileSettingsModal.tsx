@@ -1,13 +1,13 @@
 "use client";
 
-import { BellRing, Check, Clock3, KeyRound, Loader2, Mail, ShieldCheck, Sparkles, UserRoundPlus, X } from "lucide-react";
+import { BellRing, Check, ChevronDown, Clock3, KeyRound, Loader2, Mail, ShieldCheck, Sparkles, UserRound, UserRoundPlus, X } from "lucide-react";
 import {
   EmailAuthProvider,
   reauthenticateWithCredential,
   updatePassword,
   verifyBeforeUpdateEmail,
 } from "firebase/auth";
-import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   getProfileSettings,
@@ -54,6 +54,39 @@ const authErrorMessage = (error: unknown) => {
   }
 };
 
+function SettingsDisclosure({
+  children,
+  className,
+  description,
+  icon,
+  title,
+}: {
+  children: ReactNode;
+  className?: string;
+  description: string;
+  icon: ReactNode;
+  title: string;
+}) {
+  return (
+    <details
+      className={`group overflow-hidden rounded-2xl border-2 border-black bg-white ${className ?? ""}`}
+      data-settings-disclosure
+    >
+      <summary className="flex cursor-pointer list-none items-center gap-3 p-4 outline-none transition hover:bg-black/5 focus-visible:ring-4 focus-visible:ring-[#7b61ff] [&::-webkit-details-marker]:hidden">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-full border-2 border-black bg-white">
+          {icon}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-black">{title}</span>
+          <span className="mt-0.5 block text-xs leading-5 text-zinc-500">{description}</span>
+        </span>
+        <ChevronDown className="size-5 shrink-0 transition-transform group-open:rotate-180" aria-hidden="true" />
+      </summary>
+      <div className="border-t-2 border-black p-4">{children}</div>
+    </details>
+  );
+}
+
 export default function ProfileSettingsModal({ open }: { open: boolean }) {
   const { displayName, role, user, username } = useContext(AuthContext);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -73,7 +106,13 @@ export default function ProfileSettingsModal({ open }: { open: boolean }) {
   useEffect(() => {
     if (!open) return;
     const frame = window.requestAnimationFrame(() => {
-      contentRef.current?.scrollTo({ behavior: "auto", top: 0 });
+      const content = contentRef.current;
+      content
+        ?.querySelectorAll<HTMLDetailsElement>("details[data-settings-disclosure]")
+        .forEach((section) => {
+          section.open = false;
+        });
+      content?.scrollTo({ behavior: "auto", top: 0 });
     });
     return () => window.cancelAnimationFrame(frame);
   }, [open]);
@@ -327,20 +366,12 @@ export default function ProfileSettingsModal({ open }: { open: boolean }) {
         </DialogDescription>
       </DialogHeader>
 
-      <section
-        className={`rounded-2xl border-2 border-black bg-[#f4f0e8] p-4 ${
-          role === "parent" ? "order-3" : role === "student" ? "order-2" : "order-1"
-        }`}
+      <SettingsDisclosure
+        className={`${role === "parent" ? "order-3" : role === "student" ? "order-2" : "order-1"} bg-[#f4f0e8]`}
+        description={`${displayName || username} · @${username}`}
+        icon={<UserRound className="size-5" />}
+        title="Profile names"
       >
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="font-black">{displayName || username}</p>
-            <p className="text-xs font-semibold capitalize text-zinc-500">
-              @{username} · {role} account
-            </p>
-          </div>
-          <span className="rounded-full bg-black px-3 py-1 text-[10px] font-black uppercase tracking-wider text-white">Account</span>
-        </div>
         <form className="mt-4 flex flex-col gap-2 sm:flex-row" onSubmit={updateDisplayName}>
           <label className="min-w-0 flex-1">
             <span className="mb-1 block text-xs font-black uppercase tracking-wider">Display name</span>
@@ -361,21 +392,14 @@ export default function ProfileSettingsModal({ open }: { open: boolean }) {
           </button>
         </form>
         <p className="mt-2 text-xs text-zinc-500">Usernames use letters, numbers, dots, underscores, or hyphens.</p>
-      </section>
+      </SettingsDisclosure>
 
-      <section
-        className={`rounded-2xl border-2 border-black bg-white p-4 ${
-          role === "parent" ? "order-4" : role === "student" ? "order-3" : "order-2"
-        }`}
+      <SettingsDisclosure
+        className={role === "parent" ? "order-4" : role === "student" ? "order-3" : "order-2"}
+        description="Change your email address or password"
+        icon={<KeyRound className="size-5" />}
+        title="Sign-in & security"
       >
-        <div className="flex items-start gap-3">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-full border-2 border-black bg-[#e9e3ff]"><KeyRound className="size-5" /></span>
-          <div>
-            <h3 className="font-black">Sign-in &amp; security</h3>
-            <p className="mt-1 text-xs leading-5 text-zinc-500">Confirm your current password before changing sensitive account information.</p>
-          </div>
-        </div>
-
         <form className="mt-4 space-y-3 rounded-xl border border-zinc-200 bg-[#f4f0e8] p-3" onSubmit={updateSignInEmail}>
           <div>
             <p className="text-sm font-black">Change email address</p>
@@ -394,20 +418,14 @@ export default function ProfileSettingsModal({ open }: { open: boolean }) {
           <label className="block text-xs font-bold">Confirm new password<input autoComplete="new-password" className="mt-1 w-full rounded-xl border-2 border-black bg-white px-3 py-2.5 text-sm font-normal" maxLength={128} minLength={8} name="confirmPassword" required type="password" /></label>
           <button className="w-full rounded-xl border-2 border-black bg-black px-4 py-2.5 font-black text-white disabled:opacity-50" disabled={busyId === "sign-in-password"} type="submit">{busyId === "sign-in-password" ? "Updating password…" : "Change password"}</button>
         </form>
-      </section>
+      </SettingsDisclosure>
 
-      <section
-        className={`rounded-2xl border-2 border-black bg-white p-4 ${
-          role === "parent" ? "order-5" : role === "student" ? "order-4" : "order-3"
-        }`}
+      <SettingsDisclosure
+        className={role === "parent" ? "order-5" : role === "student" ? "order-4" : "order-3"}
+        description="Choose or change your profile character"
+        icon={<Sparkles className="size-5" />}
+        title="Profile avatar"
       >
-        <div className="flex items-center gap-2">
-          <Sparkles className="size-5" />
-          <div>
-            <h3 className="font-black">Choose your character</h3>
-            <p className="text-xs text-zinc-500">Pick any avatar now and change it whenever you like.</p>
-          </div>
-        </div>
         <div className="mt-4 grid grid-cols-4 gap-2 sm:grid-cols-5">
           {avatarChoices.map((avatar) => {
             const selected = selectedAvatar === avatar.url;
@@ -439,20 +457,15 @@ export default function ProfileSettingsModal({ open }: { open: boolean }) {
         >
           {busyId === "avatar" ? "Saving avatar…" : "Save avatar"}
         </button>
-      </section>
+      </SettingsDisclosure>
 
       {role === "parent" && (
-        <section className="order-2 rounded-2xl border-2 border-black bg-[#fffbd5] p-4">
-          <div className="flex items-start gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-full border-2 border-black bg-white"><Mail className="size-5" /></span>
-            <div>
-              <h3 className="font-black">Student progress emails</h3>
-              <p className="mt-1 text-xs leading-5 text-zinc-600">
-                Updates go to <strong>{user?.email}</strong> and include only students who approved your supervision request.
-              </p>
-            </div>
-          </div>
-
+        <SettingsDisclosure
+          className="order-2 bg-[#fffbd5]"
+          description={`Choose progress updates sent to ${user?.email ?? "your email"}`}
+          icon={<Mail className="size-5" />}
+          title="Student progress emails"
+        >
           <form className="mt-4 space-y-3" onSubmit={updateEmailPreferences}>
             <label className="flex items-center justify-between gap-3 rounded-xl border-2 border-black bg-white p-3">
               <span><strong className="block text-sm">Receive progress emails</strong><span className="text-xs text-zinc-500">Turn this off at any time.</span></span>
@@ -508,13 +521,17 @@ export default function ProfileSettingsModal({ open }: { open: boolean }) {
               {busyId === "email-preferences" ? "Saving email settings…" : "Save email settings"}
             </button>
           </form>
-        </section>
+        </SettingsDisclosure>
       )}
 
       {role === "parent" && (
-        <section className="order-1 rounded-2xl border-2 border-black bg-[#c7b7ff] p-4">
-          <div className="flex items-center gap-2"><UserRoundPlus className="size-5" /><h3 className="font-black">Connect to a student</h3></div>
-          <p className="mt-1 text-xs leading-5 text-zinc-700">Enter your child&apos;s exact username. They must approve the request before any assignment progress becomes visible.</p>
+        <SettingsDisclosure
+          className="order-1 bg-[#c7b7ff]"
+          description="Request access or manage connected students"
+          icon={<UserRoundPlus className="size-5" />}
+          title="Connect to a student"
+        >
+          <p className="text-xs leading-5 text-zinc-700">Enter your child&apos;s exact username. They must approve the request before any assignment progress becomes visible.</p>
           <form className="mt-3 flex flex-col gap-2 sm:flex-row" onSubmit={requestStudent}>
             <input className="min-w-0 flex-1 rounded-xl border-2 border-black bg-white px-3 py-2.5" name="studentUsername" placeholder="student username" required />
             <button className="rounded-xl border-2 border-black bg-white px-4 py-2.5 font-black disabled:opacity-60" disabled={busyId === "request"} type="submit">
@@ -530,13 +547,17 @@ export default function ProfileSettingsModal({ open }: { open: boolean }) {
               </div>
             ))}
           </div>
-        </section>
+        </SettingsDisclosure>
       )}
 
       {role === "student" && (
-        <section className="order-1 rounded-2xl border-2 border-black bg-[#fffbd5] p-4">
-          <div className="flex items-center gap-2"><ShieldCheck className="size-5" /><h3 className="font-black">Parent supervision</h3></div>
-          <p className="mt-1 text-xs leading-5 text-zinc-600">Only approve a parent or guardian you recognize. Approval gives them read-only access to your assignment progress.</p>
+        <SettingsDisclosure
+          className="order-1 bg-[#fffbd5]"
+          description={pendingRequests.length > 0 ? `${pendingRequests.length} request${pendingRequests.length === 1 ? "" : "s"} waiting` : "Approve or manage parent access"}
+          icon={<ShieldCheck className="size-5" />}
+          title="Parent supervision"
+        >
+          <p className="text-xs leading-5 text-zinc-600">Only approve a parent or guardian you recognize. Approval gives them read-only access to your assignment progress.</p>
           <div className="mt-4 grid gap-2">
             {pendingRequests.map((connection) => (
               <div className="rounded-xl border-2 border-black bg-white p-3" key={connection.id}>
@@ -554,7 +575,7 @@ export default function ProfileSettingsModal({ open }: { open: boolean }) {
           {approvedConnections.length > 0 && (
             <div className="mt-4"><p className="text-xs font-black uppercase tracking-wider">Approved supervisors</p>{approvedConnections.map((connection) => <div className="mt-2 flex items-center justify-between rounded-xl bg-emerald-100 p-3" key={connection.id}><span><strong className="block text-sm">{connection.parentDisplayName}</strong><span className="text-xs text-emerald-900/70">@{connection.parentUsername}</span></span><button className="rounded-full border border-emerald-900 px-2 py-1 text-[10px] font-black text-emerald-900 disabled:opacity-50" disabled={busyId === connection.id} onClick={() => void removeConnection(connection.id)} type="button">Revoke access</button></div>)}</div>
           )}
-        </section>
+        </SettingsDisclosure>
       )}
 
       {isLoading && <p className="order-6 flex items-center gap-2 text-sm text-zinc-500"><Loader2 className="size-4 animate-spin" /> Loading connections…</p>}
