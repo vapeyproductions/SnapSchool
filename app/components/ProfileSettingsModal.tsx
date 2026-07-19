@@ -31,14 +31,18 @@ const defaultParentEmailPreferences: ParentEmailPreferences = {
   urgentThresholdHours: 1.5,
 };
 
-const authErrorMessage = (error: unknown) => {
-  const code = typeof error === "object" && error && "code" in error
+const getAuthErrorCode = (error: unknown) =>
+  typeof error === "object" && error && "code" in error
     ? String(error.code)
     : "";
+
+const authErrorMessage = (error: unknown) => {
+  const code = getAuthErrorCode(error);
   switch (code) {
     case "auth/email-already-in-use":
       return "That email address is already connected to another account.";
     case "auth/invalid-credential":
+    case "auth/invalid-login-credentials":
     case "auth/wrong-password":
       return "The current password is incorrect.";
     case "auth/invalid-email":
@@ -47,6 +51,15 @@ const authErrorMessage = (error: unknown) => {
       return "Please log out, sign in again, and retry this security change.";
     case "auth/too-many-requests":
       return "Too many attempts were made. Wait a few minutes and try again.";
+    case "auth/network-request-failed":
+      return "Firebase could not be reached. Check your internet connection and try again.";
+    case "auth/operation-not-allowed":
+      return "Email changes are disabled in Firebase Authentication for this project. Enable the Email/Password provider, then try again.";
+    case "auth/user-disabled":
+      return "This account has been disabled in Firebase Authentication.";
+    case "auth/user-token-expired":
+    case "auth/invalid-user-token":
+      return "Your sign-in session expired. Log out, sign in again, and retry.";
     case "auth/weak-password":
       return "Choose a stronger password that meets Firebase’s password requirements.";
     default:
@@ -98,6 +111,8 @@ export default function ProfileSettingsModal({ open }: { open: boolean }) {
   const [busyId, setBusyId] = useState("");
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [emailMessage, setEmailMessage] = useState("");
+  const [emailErrorMessage, setEmailErrorMessage] = useState("");
   const [emailPreferences, setEmailPreferences] =
     useState<ParentEmailPreferences>(defaultParentEmailPreferences);
   const avatarChoices = useMemo(
@@ -229,18 +244,33 @@ export default function ProfileSettingsModal({ open }: { open: boolean }) {
     setBusyId("sign-in-email");
     setErrorMessage("");
     setMessage("");
+    setEmailErrorMessage("");
+    setEmailMessage("");
     try {
       if (nextEmail === user.email?.toLowerCase()) {
         throw new Error("Enter a different email address.");
       }
-      await confirmCurrentPassword(currentPassword);
-      await verifyBeforeUpdateEmail(user, nextEmail);
-      setMessage(
+      try {
+        // A recent sign-in already satisfies Firebase's security requirement.
+        // Avoid reauthenticating unnecessarily because Firebase can return the
+        // deliberately vague `invalid-credential` error for several reasons.
+        await verifyBeforeUpdateEmail(user, nextEmail);
+      } catch (error) {
+        if (getAuthErrorCode(error) !== "auth/requires-recent-login") throw error;
+        if (!currentPassword) {
+          throw new Error(
+            "Firebase needs a recent sign-in. Enter your current password or log out and sign in again.",
+          );
+        }
+        await confirmCurrentPassword(currentPassword);
+        await verifyBeforeUpdateEmail(user, nextEmail);
+      }
+      setEmailMessage(
         `Verification sent to ${nextEmail}. Open that email to finish changing your sign-in address.`,
       );
       form.reset();
     } catch (error) {
-      setErrorMessage(authErrorMessage(error));
+      setEmailErrorMessage(authErrorMessage(error));
     } finally {
       setBusyId("");
     }
@@ -411,8 +441,18 @@ export default function ProfileSettingsModal({ open }: { open: boolean }) {
             <p className="text-xs text-zinc-500">Current email: {user?.email ?? "Not available"}</p>
           </div>
           <label className="block text-xs font-bold">New email<input autoComplete="email" className="mt-1 w-full rounded-xl border-2 border-black bg-white px-3 py-2.5 text-sm font-normal" maxLength={254} name="newEmail" required type="email" /></label>
-          <label className="block text-xs font-bold">Current password<input autoComplete="current-password" className="mt-1 w-full rounded-xl border-2 border-black bg-white px-3 py-2.5 text-sm font-normal" maxLength={128} minLength={6} name="currentPassword" required type="password" /></label>
+          <label className="block text-xs font-bold">Current password <span className="font-normal text-zinc-500">(only needed if Firebase requests it)</span><input autoComplete="current-password" className="mt-1 w-full rounded-xl border-2 border-black bg-white px-3 py-2.5 text-sm font-normal" maxLength={128} minLength={6} name="currentPassword" type="password" /></label>
           <button className="w-full rounded-xl border-2 border-black bg-white px-4 py-2.5 font-black disabled:opacity-50" disabled={busyId === "sign-in-email"} type="submit">{busyId === "sign-in-email" ? "Sending verification…" : "Send verification to new email"}</button>
+          {emailErrorMessage && (
+            <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">
+              {emailErrorMessage}
+            </p>
+          )}
+          {emailMessage && (
+            <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800" role="status">
+              {emailMessage}
+            </p>
+          )}
           <p className="text-xs leading-5 text-zinc-500">Your current email remains active until you open the verification link sent to the new address.</p>
         </form>
 
