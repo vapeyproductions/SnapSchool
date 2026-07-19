@@ -205,11 +205,10 @@ const unreadStudentNotificationCount = (
   );
 
   if (channel.data?.assignment_type === "group") {
-    if (channel.data.teacher_request_status !== "open") return 0;
-    const requestCreatedAt = channel.data.teacher_request_created_at
-      ? new Date(channel.data.teacher_request_created_at).getTime()
-      : 0;
-    return requestCreatedAt > lastReadTime ? 1 : 0;
+    // Group conversation is intentionally excluded from teacher notifications.
+    // A deliberate Request Teacher flag remains actionable until the teacher
+    // resolves it, even if they have already opened or read the group channel.
+    return channel.data.teacher_request_status === "open" ? 1 : 0;
   }
 
   return channel.state.messages.filter((message) => {
@@ -1240,7 +1239,7 @@ export default function AdministratorClassDashboard({
                       onClick={() => setTab("messages")}
                       type="button"
                     >
-                      <span><strong className="block">{unreadNotificationCount} unread student message{unreadNotificationCount === 1 ? "" : "s"}</strong><span className="text-xs">Open the notification inbox to read and respond.</span></span>
+                      <span><strong className="block">{unreadNotificationCount} notification{unreadNotificationCount === 1 ? "" : "s"} requiring attention</strong><span className="text-xs">Open the notification inbox to review and respond.</span></span>
                       <Inbox className="size-6" />
                     </button>
                   )}

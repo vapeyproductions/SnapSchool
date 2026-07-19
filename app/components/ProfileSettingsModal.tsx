@@ -239,7 +239,6 @@ export default function ProfileSettingsModal({ open }: { open: boolean }) {
     if (!user) return;
     const form = event.currentTarget;
     const data = new FormData(form);
-    const currentPassword = String(data.get("currentPassword") ?? "");
     const nextEmail = String(data.get("newEmail") ?? "").trim().toLowerCase();
     setBusyId("sign-in-email");
     setErrorMessage("");
@@ -250,21 +249,10 @@ export default function ProfileSettingsModal({ open }: { open: boolean }) {
       if (nextEmail === user.email?.toLowerCase()) {
         throw new Error("Enter a different email address.");
       }
-      try {
-        // A recent sign-in already satisfies Firebase's security requirement.
-        // Avoid reauthenticating unnecessarily because Firebase can return the
-        // deliberately vague `invalid-credential` error for several reasons.
-        await verifyBeforeUpdateEmail(user, nextEmail);
-      } catch (error) {
-        if (getAuthErrorCode(error) !== "auth/requires-recent-login") throw error;
-        if (!currentPassword) {
-          throw new Error(
-            "Firebase needs a recent sign-in. Enter your current password or log out and sign in again.",
-          );
-        }
-        await confirmCurrentPassword(currentPassword);
-        await verifyBeforeUpdateEmail(user, nextEmail);
-      }
+      // Firebase accepts the account's recent login as verification. If the
+      // session is old, asking the user to sign in again is more reliable than
+      // attempting a second password login inside this already-authenticated UI.
+      await verifyBeforeUpdateEmail(user, nextEmail);
       setEmailMessage(
         `Verification sent to ${nextEmail}. Open that email to finish changing your sign-in address.`,
       );
@@ -441,7 +429,6 @@ export default function ProfileSettingsModal({ open }: { open: boolean }) {
             <p className="text-xs text-zinc-500">Current email: {user?.email ?? "Not available"}</p>
           </div>
           <label className="block text-xs font-bold">New email<input autoComplete="email" className="mt-1 w-full rounded-xl border-2 border-black bg-white px-3 py-2.5 text-sm font-normal" maxLength={254} name="newEmail" required type="email" /></label>
-          <label className="block text-xs font-bold">Current password <span className="font-normal text-zinc-500">(only needed if Firebase requests it)</span><input autoComplete="current-password" className="mt-1 w-full rounded-xl border-2 border-black bg-white px-3 py-2.5 text-sm font-normal" maxLength={128} minLength={6} name="currentPassword" type="password" /></label>
           <button className="w-full rounded-xl border-2 border-black bg-white px-4 py-2.5 font-black disabled:opacity-50" disabled={busyId === "sign-in-email"} type="submit">{busyId === "sign-in-email" ? "Sending verification…" : "Send verification to new email"}</button>
           {emailErrorMessage && (
             <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">
