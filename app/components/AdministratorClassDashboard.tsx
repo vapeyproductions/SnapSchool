@@ -193,18 +193,32 @@ const isStudentMessage = (
       !isRoutineProgressMessage(message),
   );
 
-const isUnreadStudentMessage = (
+const unreadStudentNotificationCount = (
   channel: StreamChannel,
-  message: StreamChannel["state"]["messages"][number],
   currentUserId: string,
+  locallyReadThrough = 0,
 ) => {
-  if (!isStudentMessage(channel, message)) return false;
   const lastRead = channel.state.read[currentUserId]?.last_read;
-  const lastReadTime = lastRead ? new Date(lastRead).getTime() : 0;
-  const createdAt = message.created_at
-    ? new Date(message.created_at).getTime()
-    : 0;
-  return createdAt > lastReadTime;
+  const lastReadTime = Math.max(
+    lastRead ? new Date(lastRead).getTime() : 0,
+    locallyReadThrough,
+  );
+
+  if (channel.data?.assignment_type === "group") {
+    if (channel.data.teacher_request_status !== "open") return 0;
+    const requestCreatedAt = channel.data.teacher_request_created_at
+      ? new Date(channel.data.teacher_request_created_at).getTime()
+      : 0;
+    return requestCreatedAt > lastReadTime ? 1 : 0;
+  }
+
+  return channel.state.messages.filter((message) => {
+    if (!isStudentMessage(channel, message)) return false;
+    const createdAt = message.created_at
+      ? new Date(message.created_at).getTime()
+      : 0;
+    return createdAt > lastReadTime;
+  }).length;
 };
 
 function AssignmentManagement({
@@ -564,6 +578,7 @@ export default function AdministratorClassDashboard({
   const [tab, setTab] = useState<DashboardTab>("overview");
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [locallyReadThrough, setLocallyReadThrough] = useState<Record<string, number>>({});
   const [, refresh] = useState(0);
 
   useEffect(() => {
@@ -847,7 +862,11 @@ export default function AdministratorClassDashboard({
           createdAt: isOpen ? channel.data.teacher_request_created_at : undefined,
           preview: isOpen ? channel.data.teacher_request_question : undefined,
           teacherRequest: true,
-          unreadCount: isOpen ? 1 : 0,
+          unreadCount: unreadStudentNotificationCount(
+            channel,
+            user.uid,
+            locallyReadThrough[channel.cid],
+          ),
         };
       }
 
@@ -859,9 +878,11 @@ export default function AdministratorClassDashboard({
         createdAt: message?.created_at,
         preview: message?.text,
         teacherRequest: false,
-        unreadCount: channel.state.messages.filter((item) =>
-          isUnreadStudentMessage(channel, item, user.uid),
-        ).length,
+        unreadCount: unreadStudentNotificationCount(
+          channel,
+          user.uid,
+          locallyReadThrough[channel.cid],
+        ),
       };
     })
     .filter((thread) => Boolean(thread.preview))
@@ -870,6 +891,10 @@ export default function AdministratorClassDashboard({
         new Date(second.createdAt ?? 0).getTime() -
         new Date(first.createdAt ?? 0).getTime(),
     );
+  const unreadNotificationCount = messageThreads.reduce(
+    (total, thread) => total + thread.unreadCount,
+    0,
+  );
   const replyChannel = selectedAssignment?.channels.find(
     (channel) => channel.cid === replyChannelCid,
   );
@@ -1015,13 +1040,11 @@ export default function AdministratorClassDashboard({
                   ) / assignment.channels.length,
                 );
                 const unread = assignment.channels.reduce(
-                  (total, channel) =>
-                    total +
-                    (channel.data?.assignment_type === "group"
-                      ? channel.data.teacher_request_status === "open"
-                        ? 1
-                        : 0
-                      : channel.countUnread()),
+                  (total, channel) => total + unreadStudentNotificationCount(
+                    channel,
+                    user.uid,
+                    locallyReadThrough[channel.cid],
+                  ),
                   0,
                 );
                 const priority = getAssignmentPriority(assignment.channels[0].data ?? {});
@@ -1152,7 +1175,7 @@ export default function AdministratorClassDashboard({
                 <div className="mt-4 flex gap-1 overflow-x-auto rounded-full border-2 border-black bg-[#f4f0e8] p-1">
                   {([
                     ["overview", "Overview"],
-                    ["messages", `Notifications (${messageThreads.length})`],
+                    ["messages", `Notifications (${unreadNotificationCount})`],
                     ["progress", isGroupAssignment ? "Group progress" : "Student progress"],
                     ...(groupAssignmentChannel
                       ? [["group-chat", "Group chats"] as const]
@@ -1211,13 +1234,13 @@ export default function AdministratorClassDashboard({
                         : "Activates the day after the due date"}
                     </p>
                   </div>
-                  {messageThreads.length > 0 && (
+                  {unreadNotificationCount > 0 && (
                     <button
                       className="flex items-center justify-between rounded-2xl border-2 border-black bg-[#c7b7ff] p-4 text-left shadow-[3px_3px_0_#111] sm:col-span-2 lg:col-span-4"
                       onClick={() => setTab("messages")}
                       type="button"
                     >
-                      <span><strong className="block">{messageThreads.length} {isGroupAssignment ? "teacher request" : "student message thread"}{messageThreads.length === 1 ? "" : "s"}</strong><span className="text-xs">Open the notification inbox to respond.</span></span>
+                      <span><strong className="block">{unreadNotificationCount} unread student message{unreadNotificationCount === 1 ? "" : "s"}</strong><span className="text-xs">Open the notification inbox to read and respond.</span></span>
                       <Inbox className="size-6" />
                     </button>
                   )}
@@ -1225,8 +1248,8 @@ export default function AdministratorClassDashboard({
               )}
 
               {tab === "messages" && (
-                <section className="grid min-h-[31rem] lg:grid-cols-[18rem_minmax(0,1fr)]">
-                  <div className="border-b-2 border-black bg-white p-3 lg:border-b-0 lg:border-r-2">
+                <section className="teacher-message-workspace grid min-h-[31rem] min-w-0 overflow-hidden md:grid-cols-[minmax(13rem,16rem)_minmax(0,1fr)]">
+                  <div className="min-w-0 overflow-hidden border-b-2 border-black bg-white p-3 md:border-b-0 md:border-r-2">
                     <p className="mb-3 px-1 text-xs font-black uppercase tracking-wider">Student messages</p>
                     <div className="grid gap-2">
                       {messageThreads.length === 0 ? (
@@ -1234,26 +1257,42 @@ export default function AdministratorClassDashboard({
                       ) : (
                         messageThreads.map(({ channel, preview, teacherRequest, unreadCount }) => (
                           <button
-                            className={`rounded-2xl border-2 p-3 text-left ${replyChannelCid === channel.cid ? "border-black bg-[#fffbd5]" : "border-zinc-200 bg-white"}`}
+                            className={`w-full min-w-0 max-w-full overflow-hidden rounded-2xl border-2 p-3 text-left ${replyChannelCid === channel.cid ? "border-black bg-[#fffbd5]" : "border-zinc-200 bg-white"}`}
                             key={channel.cid}
-                            onClick={() => setReplyChannelCid(channel.cid)}
+                            onClick={() => {
+                              const readThrough = Date.now();
+                              setReplyChannelCid(channel.cid);
+                              setLocallyReadThrough((current) => ({
+                                ...current,
+                                [channel.cid]: readThrough,
+                              }));
+                              void channel.markRead()
+                                .then(() => refresh((value) => value + 1))
+                                .catch(() => {
+                                  setLocallyReadThrough((current) => {
+                                    const next = { ...current };
+                                    delete next[channel.cid];
+                                    return next;
+                                  });
+                                });
+                            }}
                             type="button"
                           >
-                            <span className="flex items-center justify-between gap-2">
-                              <strong className="truncate text-sm capitalize">
+                            <span className="flex min-w-0 items-center justify-between gap-2">
+                              <strong className="min-w-0 flex-1 truncate text-sm capitalize">
                                 {teacherRequest
                                   ? `Teacher request · ${channel.data?.teacher_request_requested_by_name || "Group"}`
                                   : studentName(channel)}
                               </strong>
-                              {unreadCount > 0 && <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white">New</span>}
+                              {unreadCount > 0 && <span className="shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white">{unreadCount} new</span>}
                             </span>
-                            <span className="mt-1 block truncate text-xs text-zinc-600">{preview}</span>
+                            <span className="mt-1 block max-w-full truncate text-xs text-zinc-600">{preview}</span>
                           </button>
                         ))
                       )}
                     </div>
                   </div>
-                  <div className="min-h-[31rem] bg-white">
+                  <div className="min-h-[31rem] min-w-0 overflow-hidden bg-white">
                     {replyChannel ? (
                       <Channel channel={replyChannel}>
                         <Window>
@@ -1289,11 +1328,7 @@ export default function AdministratorClassDashboard({
                               user={user}
                             />
                           </div>
-                          <MessageList
-                            messages={replyChannel.state.messages.filter(
-                              (message) => !isRoutineProgressMessage(message),
-                            )}
-                          />
+                          <MessageList />
                           <MessageComposer />
                         </Window>
                       </Channel>

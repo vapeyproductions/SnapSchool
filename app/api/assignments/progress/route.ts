@@ -9,7 +9,7 @@ import { parseProgressAnalysis } from "@/lib/progress-analysis";
 export const runtime = "nodejs";
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
-const MAX_FILES = 6;
+const MAX_FILES = 10;
 const MAX_TOTAL_FILE_BYTES = 12 * 1024 * 1024;
 const IMAGE_TYPES = new Set(["image/gif", "image/jpeg", "image/png", "image/webp"]);
 const DOCUMENT_TYPES = new Set([
@@ -165,7 +165,7 @@ export async function POST(request: Request) {
       return errorResponse("The progress files must be 12 MB or smaller in total", 400);
     }
     if (files.length > 1 && files.some((file) => !IMAGE_TYPES.has(file.type))) {
-      return errorResponse("Upload either one document or up to six worksheet photos", 400);
+      return errorResponse(`Upload either one document or up to ${MAX_FILES} worksheet photos`, 400);
     }
     if (files.some((file) => !IMAGE_TYPES.has(file.type) && !DOCUMENT_TYPES.has(file.type))) {
       return errorResponse("Upload PNG, JPEG, WebP, GIF, PDF, Word, or text files", 400);

@@ -16,7 +16,7 @@ type ProgressResult = {
 };
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
-const MAX_PHOTOS = 6;
+const MAX_PHOTOS = 10;
 const MAX_UPLOAD_BYTES = 3.5 * 1024 * 1024;
 const MAX_IMAGE_DIMENSION = 2200;
 
@@ -194,7 +194,7 @@ export function StudentProgressSubmission() {
     const allSelectedFiles = append ? [...files, ...selected] : selected;
     if (allSelectedFiles.length > 1 && allSelectedFiles.some((file) => !file.type.startsWith("image/"))) {
       setFiles([]);
-      setErrorMessage("Upload either one document or up to six worksheet photos");
+      setErrorMessage(`Upload either one document or up to ${MAX_PHOTOS} worksheet photos`);
       return;
     }
 

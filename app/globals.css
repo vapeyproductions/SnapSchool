@@ -202,6 +202,23 @@
   border-radius: 1.25rem;
 }
 
+.teacher-message-workspace .str-chat__channel,
+.teacher-message-workspace .str-chat__container,
+.teacher-message-workspace .str-chat__main-panel,
+.teacher-message-workspace .str-chat__window {
+  width: 100%;
+  min-width: 0;
+}
+
+.teacher-message-workspace .str-chat__window {
+  height: 31rem;
+}
+
+.teacher-message-workspace .str-chat__message-list,
+.teacher-message-workspace .str-chat__message-input {
+  min-width: 0;
+}
+
 .assignment-story-card {
   margin-bottom: .5rem;
   overflow: hidden;
