@@ -89,9 +89,9 @@ The repository does not contain passwords. Replace the placeholders below with d
 
 | Role | Email | Password | Prepared state |
 | --- | --- | --- | --- |
-| Student | `<student demo email>` | `<student demo password>` | Member of the demo class with active assignments |
-| Teacher | `<teacher demo email>` | `<teacher demo password>` | Owns the demo class and assignments |
-| Parent | `<parent demo email>` | `<parent demo password>` | Already approved by the demo student |
+| Student | `<snapschooldemo.student@gmail.com>` | `<snapschooldemo.student>` | Member of the demo class with active assignments |
+| Teacher | `<snapschooldemo.teacher@gmail.com>` | `<snapschooldemo.teacher>` | Owns the demo class and assignments |
+| Parent | `<eva.moughan@gmail.com>` | `<snapschooldemo.parent>` | Already approved by the demo student |
 
 Use synthetic names and homework in these accounts. Never publish credentials for personal accounts or accounts containing real student information.
 
