@@ -3,6 +3,8 @@ import { StreamChat } from "stream-chat";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
 
 export const maxDuration = 60;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 type EmailMode = "daily_summary" | "due_only" | "due_or_urgent";
 
@@ -217,16 +219,19 @@ const emailContent = (
   };
 };
 
-export async function GET(request: Request) {
-  const cronSecret = process.env.CRON_SECRET;
-  if (
-    !cronSecret ||
-    request.headers.get("authorization") !== `Bearer ${cronSecret}`
-  ) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+type DeliveryOptions = {
+  force?: boolean;
+  modeOverride?: EmailMode;
+  onlyParentUid?: string;
+  runId: string;
+};
 
-  try {
+const runParentEmailDelivery = async ({
+  force = false,
+  modeOverride,
+  onlyParentUid,
+  runId,
+}: DeliveryOptions) => {
     const resendApiKey = process.env.RESEND_API_KEY;
     const emailFrom = process.env.SNAPSCHOOL_EMAIL_FROM;
     const streamApiKey = process.env.NEXT_PUBLIC_STREAM_API_KEY;
@@ -241,10 +246,9 @@ export async function GET(request: Request) {
     const db = getAdminDb();
     const auth = getAdminAuth();
     const streamClient = StreamChat.getInstance(streamApiKey, streamSecret);
-    const preferencesSnapshot = await db
-      .collection("parentEmailPreferences")
-      .where("enabled", "==", true)
-      .get();
+    const preferencesSnapshot = onlyParentUid
+      ? await db.collection("parentEmailPreferences").where("parentUid", "==", onlyParentUid).get()
+      : await db.collection("parentEmailPreferences").where("enabled", "==", true).get();
     const dashboardUrl = process.env.NEXT_PUBLIC_APP_URL ||
       (process.env.VERCEL_PROJECT_PRODUCTION_URL
         ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/chat`
@@ -254,10 +258,16 @@ export async function GET(request: Request) {
     let skipped = 0;
     const errors: string[] = [];
 
+    console.info("[parent-progress-emails] Starting delivery", {
+      enabledPreferences: preferencesSnapshot.size,
+      onlyParentUid: onlyParentUid ?? null,
+      runId,
+    });
+
     for (const preferenceDocument of preferencesSnapshot.docs) {
       const preference = preferenceDocument.data() as ParentPreference;
       const parentUid = preference.parentUid || preferenceDocument.id;
-      const mode = preference.mode ?? "due_only";
+      const mode = modeOverride ?? preference.mode ?? "due_only";
       const timeZone = preference.timeZone || "America/New_York";
       const thresholdHours = Math.min(
         24,
@@ -265,7 +275,7 @@ export async function GET(request: Request) {
       );
       try {
         const today = dateKey(new Date(), timeZone);
-        if (preference.lastSentDate === today) {
+        if (!force && preference.lastSentDate === today) {
           skipped += 1;
           continue;
         }
@@ -323,7 +333,7 @@ export async function GET(request: Request) {
           headers: {
             Authorization: `Bearer ${resendApiKey}`,
             "Content-Type": "application/json",
-            "Idempotency-Key": `parent-progress-${parentUid}-${today}-${mode}`,
+            "Idempotency-Key": `parent-progress-${parentUid}-${today}-${mode}-${runId}`,
             "User-Agent": "SnapSchool/1.0",
           },
           method: "POST",
@@ -338,20 +348,95 @@ export async function GET(request: Request) {
         });
         sent += 1;
       } catch (error) {
-        errors.push(
-          `${parentUid}: ${error instanceof Error ? error.message : "Unable to send"}`,
-        );
+        const message = `${parentUid}: ${error instanceof Error ? error.message : "Unable to send"}`;
+        console.error("[parent-progress-emails] Parent delivery failed", message);
+        errors.push(message);
       }
     }
 
-    return Response.json({ errors: errors.slice(0, 10), sent, skipped });
+    const result = { errors: errors.slice(0, 10), sent, skipped };
+    console.info("[parent-progress-emails] Delivery complete", { ...result, runId });
+    return result;
+};
+
+const jsonResponse = (body: unknown, init?: ResponseInit) =>
+  Response.json(body, {
+    ...init,
+    headers: {
+      "Cache-Control": "no-store, max-age=0",
+      ...init?.headers,
+    },
+  });
+
+export async function GET(request: Request) {
+  const cronSecret = process.env.CRON_SECRET;
+  if (
+    !cronSecret ||
+    request.headers.get("authorization") !== `Bearer ${cronSecret}`
+  ) {
+    return jsonResponse({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const result = await runParentEmailDelivery({
+      runId: `scheduled-${new Date().toISOString().slice(0, 10)}`,
+    });
+    return jsonResponse(result);
   } catch (error) {
-    return Response.json(
+    console.error("[parent-progress-emails] Scheduled delivery failed", error);
+    return jsonResponse(
       {
         error:
           error instanceof Error
             ? error.message
             : "Unable to send parent progress emails",
+      },
+      { status: 500 },
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const authorization = request.headers.get("authorization") ?? "";
+    const idToken = authorization.startsWith("Bearer ")
+      ? authorization.slice("Bearer ".length)
+      : "";
+    if (!idToken) return jsonResponse({ error: "Unauthorized" }, { status: 401 });
+
+    const auth = getAdminAuth();
+    const db = getAdminDb();
+    const account = await auth.verifyIdToken(idToken);
+    const profile = await db.collection("profiles").doc(account.uid).get();
+    if (profile.data()?.role !== "parent") {
+      return jsonResponse(
+        { error: "Only parent accounts can send a test progress email." },
+        { status: 403 },
+      );
+    }
+
+    const result = await runParentEmailDelivery({
+      force: true,
+      modeOverride: "daily_summary",
+      onlyParentUid: account.uid,
+      runId: `manual-${Date.now()}`,
+    });
+    const error = result.errors[0];
+    if (result.sent === 0) {
+      return jsonResponse(
+        {
+          ...result,
+          error: error ?? "No email preference record was found. Save your email settings first.",
+        },
+        { status: 400 },
+      );
+    }
+    return jsonResponse(result);
+  } catch (error) {
+    console.error("[parent-progress-emails] Manual test failed", error);
+    return jsonResponse(
+      {
+        error: error instanceof Error ? error.message : "Unable to send test email",
       },
       { status: 500 },
     );

@@ -375,6 +375,41 @@ export default function ProfileSettingsModal({ open }: { open: boolean }) {
     setBusyId("");
   };
 
+  const sendTestProgressEmail = async () => {
+    if (!user || role !== "parent") return;
+    setBusyId("test-progress-email");
+    setErrorMessage("");
+    setMessage("");
+    try {
+      const response = await fetch("/api/cron/parent-progress-emails", {
+        headers: {
+          Authorization: `Bearer ${await user.getIdToken(true)}`,
+        },
+        method: "POST",
+      });
+      const result = (await response.json()) as {
+        error?: string;
+        errors?: string[];
+        sent?: number;
+      };
+      if (!response.ok || result.sent !== 1) {
+        throw new Error(
+          result.error ||
+            result.errors?.[0] ||
+            "The test email could not be sent.",
+        );
+      }
+      setMessage(
+        `Test progress email sent to ${user.email}. Check spam or junk if it does not arrive shortly.`,
+      );
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Unable to send test email",
+      );
+    }
+    setBusyId("");
+  };
+
   const pendingRequests = connections.filter((connection) => connection.status === "pending");
   const approvedConnections = connections.filter((connection) => connection.status === "approved");
 
@@ -554,6 +589,23 @@ export default function ProfileSettingsModal({ open }: { open: boolean }) {
             <button className="w-full rounded-xl border-2 border-black bg-black px-4 py-2.5 font-black text-white disabled:opacity-50" disabled={busyId === "email-preferences"} type="submit">
               {busyId === "email-preferences" ? "Saving email settings…" : "Save email settings"}
             </button>
+            <button
+              className="w-full rounded-xl border-2 border-black bg-white px-4 py-2.5 font-black text-black disabled:opacity-50"
+              disabled={busyId === "test-progress-email"}
+              onClick={() => void sendTestProgressEmail()}
+              type="button"
+            >
+              {busyId === "test-progress-email" ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="size-4 animate-spin" /> Sending test email…
+                </span>
+              ) : (
+                "Send test email now"
+              )}
+            </button>
+            <p className="text-xs leading-5 text-zinc-500">
+              The test always sends a daily-style summary so you can verify the recipient address and email delivery immediately.
+            </p>
           </form>
         </SettingsDisclosure>
       )}
